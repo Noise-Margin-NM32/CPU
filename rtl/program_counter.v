@@ -4,19 +4,22 @@ module program_counter(
     input clk,
     input rst, // reset
     input en, // enable the pc
-    input load, // jump enable 
+    input jump, // jump enable 
     input [31:0]d_in, // address to jump at
     
     output reg [31:0] pc // output address to reach at 
 );
 
+//    reg pc_en;
 
+//    assign pc_en = en;
+    
     always @(posedge clk or negedge rst) begin
         if(!rst) begin
             pc <= 32'h00000000;
         end    
     
-        else if (load) begin
+        else if (jump) begin
             pc <= d_in; // jump
         end
     

@@ -5,9 +5,26 @@ module top_piplined(
 
 
 // Stage 1: Fetch(IF) signals: PC + ROM 
-wire en, load; // en- pc enable    load- jump enable 
+
+
+// Stage 2: Decode (ID) Signals: Control UNit 
+
+
+
+// Stage 3: EXECUTE 
+
+
+
+
+// ******STAGE 1
+
+wire en, jump; // en- pc enable  
 wire [31:0] d_in; // addr to jump 
 wire [31:0] pc;
+
+
+assign en = 1'b1; // always enable the pc to increment
+assign jump = 1'b0; // no jump in this design, for now
 
 wire [31:0] instruction; // ROM: instruction retruned from ROM
 
@@ -16,55 +33,9 @@ wire [31:0] instruction; // ROM: instruction retruned from ROM
 reg [31:0] if_id_instr;
 
 
-// Stage 2: Decode (ID) Signals: Control UNit 
-// Decode goal: figure out what to do and get the data
-
-// CU
-wire [4:0] reg_sel_a, reg_sel_b; // register numebr retutned from the control unit after decoding the instruction 
-wire en_write;// coming from cu to register file 
-wire [4:0] write_reg; // choosen write reg by cu to register file 
-wire [3:0] alu_op; //
-wire [31:0] addr; // address to be read from mem by the cu 
-wire write_en; // write enable returned by the cu to the mem module 
-wire cu_alu_en; // alu enable returned by cu
-
-// register file 
-wire [31:0] read_data1,read_data2; //coming by reading the register-- can either go back to register or alu or memory
-
-// reading mem
-wire [31:0] data_out; // data read from the mem to the ........
-
-
-// -- PIpline Register: ID/EXECUTE
-
-reg [4:0] id_ex_write_reg; // choosen write reg by cu to register file 
-reg [3:0] id_ex_alu_op; //
-reg [31:0] id_ex_addr; // address to be read from mem by the cu 
-reg id_ex_en_write; // write enable returned by the cu to the mem module 
-reg [31:0] id_ex_data_out;
-reg [31:0] id_ex_read_data1,id_ex_read_data2;
-reg id_ex_write_en; // write enable to write in mem after decoded in cpu 
-
-reg [19:0] id_ex_imm;//???
-
-reg [6:0] id_ex_opcode;
-reg id_ex_alu_en;
-
-
-// Stage 3: EXECUTE 
-wire [31:0] alu_result;
-wire [31:0] write_data; // data from  from  register file to mem or data written to mem
-wire [31:0] write_back_data; //  the data that actually goes to the reg values
-wire zero_flag, carry;
-
-wire [19:0]if_id_imm;
-
-
-
-// ******STAGE 1
 program_counter pc_inst(
     // input 
-    .clk(clk), .rst(rst), .en(en), .load(load), .d_in(d_in), 
+    .clk(clk), .rst(rst), .en(en), .jump(jump), .d_in(d_in), 
     // output 
     .pc(pc)
 );
@@ -79,63 +50,111 @@ instruction_mem ROM(
 
 // if_id 
 always @(posedge clk) begin
-    if(!rst || load ) if_id_instr <= 32'h00000000;
+    if(!rst || jump ) if_id_instr <= 32'h00000000;
     else if_id_instr <= instruction;
 
 end 
 
 
 // STAGE 2: cu decodeing and data reading from ram or reg files
+
+// Decode goal: figure out what to do and get the data
+
+// CU
+wire [4:0] reg_sel_a, reg_sel_b; // register numebr retutned from the control unit after decoding the instruction 
+wire en_write;// coming from cu to register file 
+wire [4:0] write_reg; // choosen write reg by cu to register file 
+wire [3:0] alu_op; //
+wire [19:0] imm; // immediate value
+wire cu_alu_en; // alu enable returned by cu
+// wire [31:0] addr; // address to be read from mem by the cu 
+// wire write_en; // write enable returned by the cu to the mem module 
+// wire load_instr;
+wire [2:0] instr_type; // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J
+wire [2:0] load_size; // to identify the size of the data to be loaded (byte, half-word, word) 00-byte, 01-half-word, 10
+
+
+// -- PIpline Register: ID/EXECUTE
+
+reg [4:0] id_ex_write_reg; // choosen write reg by cu to register file 
+reg [3:0] id_ex_alu_op; //alu_opcode
+reg [4:0] id_ex_reg_sel_a,id_ex_reg_sel_b; // register selectors returned by the control unit  
+reg id_ex_en_write; // write enable returned by the cu to the mem module 
+// reg [31:0] id_ex_data_out;
+reg id_ex_write_en; // write enable to write in mem after decoded in cpu 
+
+reg [19:0] id_ex_imm;//???
+
+reg [2:0] id_ex_instr_type; // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J
+reg [2:0] id_ex_load_size; // to identify the size of the data
+reg id_ex_alu_en;
+reg id_ex_zero_flag;
+
+
 control_unit cu(
     // input 
     .instr(if_id_instr),
-    .status_z(zero_flag),    
+    // .status_z(zero_flag),    
     // output 
     .reg_sel_a(reg_sel_a),
     .reg_sel_b(reg_sel_b),
-
-    .imm(if_id_imm),
     .en_write(en_write),
+    .write_en(write_en),
+
     .write_reg(write_reg),
     .alu_op(alu_op),
-    .data_in(d_in),
-    .addr(addr),
-    .en(en),.load(load),
-    .write_en(write_en),
-    .alu_en(cu_alu_en)
+    .imm(imm),
+
+    .alu_en(cu_alu_en),
+    // .addr(addr),
+    // .load_instr(load_instr),
+    // .en(en),.load(load),
+    .instr_type(instr_type),
+    .load_size(load_size)
 );
-
-
-
-
 
 // pipline ID to Execute
 always @(posedge clk) begin
 
     if(!rst) begin
-        id_ex_en_write <=0; 
-        id_ex_write_en <=0;
+        // id_ex_en_write_reg <=0; 
         id_ex_alu_op <= 4'b0000;
+        id_ex_reg_sel_a <=0;
+        id_ex_reg_sel_b <=0;
+        id_ex_en_write <=0;
+        id_ex_imm <= 20'b00000000000000000000;
         id_ex_write_reg <= 5'b00000;
-        id_ex_data_out <= 32'h00000000;
-        id_ex_read_data1 <= 32'h00000000;
-        id_ex_read_data2 <= 32'h00000000;
+        id_ex_instr_type <= 3'b000;
+        id_ex_load_size <= 3'b000;
         id_ex_alu_en <= 1'b0;
+        // id_ex_zero_flag <= 1'b0;
 
     end 
 
     else begin 
-        id_ex_read_data1 <= read_data1;
-        id_ex_read_data2 <= read_data2;
+        // id_ex_alu <= read_data1;
+        // id_ex_read_data2 <= read_data2;
+        // id_ex_en_write <= en_write;
+        // id_ex_write_en <= write_en;
+        // id_ex_write_reg <= write_reg;
+        // id_ex_alu_op <= alu_op;
+        // id_ex_data_out <= data_out;
+        // id_ex_opcode <= if_id_instr[6:0];
+        // id_ex_imm <= if_id_imm;
+        // id_ex_addr <=  addr;
+        // id_ex_alu_en <= cu_alu_en;
+
+        id_ex_alu_op <= alu_op;
+        id_ex_reg_sel_a <= reg_sel_a;
+        id_ex_reg_sel_b <= reg_sel_b;
         id_ex_en_write <= en_write;
         id_ex_write_en <= write_en;
+        id_ex_imm <= imm;
         id_ex_write_reg <= write_reg;
-        id_ex_alu_op <= alu_op;
-        id_ex_data_out <= data_out;
-        id_ex_opcode <= if_id_instr[6:0];
-        id_ex_imm <= if_id_imm;
-        id_ex_addr <=  addr;
+        id_ex_instr_type <= instr_type;
+        id_ex_load_size <= load_size;
         id_ex_alu_en <= cu_alu_en;
+        // id_ex_zero_flag <= zero_flag;
 
     end
 
@@ -143,15 +162,62 @@ end
 
 
 // stage 3 exeucte 
+wire [31:0] alu_result;
+wire zero_flag, carry;
+wire [31:0] alu_A, alu_B;
 
+wire [31:0] write_data; // data from  from  register file to mem or data written to mem
+wire [31:0] write_back_data; //  the data that actually goes to the reg values
+
+wire [19:0]if_id_imm;
+
+// register file 
+wire [31:0] read_data1,read_data2; //coming by reading the register-- can either go back to register or alu or memory
+
+// reading mem\
+wire [31:0] addr; // address to be read from mem by the cu
+wire [31:0] data_out; // data read from the mem to the ........
+
+assign alu_A = (id_ex_instr_type == 3'b000) ? read_data1 :
+               (id_ex_instr_type == 3'b001) ? read_data1 :
+               (id_ex_instr_type == 3'b010) ? read_data1 :
+               (id_ex_instr_type == 3'b011) ? read_data1 :
+               (id_ex_instr_type == 3'b100) ? read_data1 :
+               (id_ex_instr_type == 3'b101) ? read_data1 : 
+               (id_ex_instr_type == 3'b110) ? read_data1 : 32'h00000000;
+
+assign alu_B = (id_ex_instr_type == 3'b000) ? read_data2 :
+               (id_ex_instr_type == 3'b001) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for IL-type
+               (id_ex_instr_type == 3'b010) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for IA-type
+               (id_ex_instr_type == 3'b011) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for S-type
+               (id_ex_instr_type == 3'b100) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for B-type
+               (id_ex_instr_type == 3'b101) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 
+               (id_ex_instr_type == 3'b110) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 32'h00000000; // Sign-extend immediate for J-type
+
+
+assign write_back_data = (id_ex_instr_type == 3'b000) ? alu_result : 
+                        (id_ex_instr_type == 3'b001) ?  (id_ex_load_size == 3'b000) ? {{24{data_out[7]}}, data_out[7:0]} : 
+                                                        (id_ex_load_size == 3'b001) ? {{16{data_out[15]}}, data_out[15:0]} :
+                                                        (id_ex_load_size == 3'b010) ? data_out :
+                                                        (id_ex_load_size == 3'b011) ? {24'b0, data_out[7:0]} : 
+                                                        (id_ex_load_size == 3'b100) ? {16'b0, data_out[15:0]} : 
+                                                        data_out :
+                        (id_ex_instr_type == 3'b010) ? alu_result : 
+                        (id_ex_instr_type == 3'b011) ? data_out : 
+                        (id_ex_instr_type == 3'b100) ? alu_result : 
+                        (id_ex_instr_type == 3'b101) ? alu_result : 
+                        (id_ex_instr_type == 3'b110) ? alu_result : 32'h00000000;
+
+assign addr = (id_ex_instr_type == 3'b001) ? alu_result : 
+                       (id_ex_instr_type == 3'b011) ? alu_result : 32'h00000000;
 
 data_mem mem(
 
     // input 
     .clk(clk),
-    .addr(id_ex_addr), // this addr can come for stage 2( directly) or in stage 3 
+    .addr(addr), // this addr can come for stage 2( directly) or in stage 3 
     .write_en(id_ex_write_en),
-    .write_data(id_ex_read_data1), // **** wrtie back from Execute stage
+    .write_data(write_data), // **** wrtie back from Execute stage
     
     // output
     .data_out(data_out) // getting data is stage 2
@@ -168,8 +234,8 @@ register_file reg_file(
     .write_data(write_back_data), // this write data can come from 3 place 1) Mem using READ command 2) ALU using SUB,MOV ADD commands 3) from instruction direct  by immediate value 
    
    // inputs (( reading reg in stage 2 ))
-    .read_reg1(reg_sel_a),
-    .read_reg2(reg_sel_b),
+    .read_reg1(id_ex_reg_sel_a),
+    .read_reg2(id_ex_reg_sel_b),
 
 
     // output
@@ -181,8 +247,8 @@ register_file reg_file(
 
 alu alu_unit(
     .alu_en(id_ex_alu_en),
-    .A(id_ex_read_data1),
-    .B(id_ex_read_data2),
+    .A(alu_A),
+    .B(alu_B),
     .alu_op(id_ex_alu_op),
     .result(alu_result),
     .zero_flag(zero_flag),
@@ -192,13 +258,6 @@ alu alu_unit(
 // *********
 // this write data can come from 3 place 1) Mem using READ command 2) ALU using SUB,MOV ADD commands 3) from instruction direct  by immediate value 
 // If Opcode is 0 (LOADI), take immediate. If 4 (READ), take RAM. Else ALU.
-
-//verify this pls
-
-  assign write_back_data = (id_ex_opcode == 7'b0000011) ? data_out : // Load from RAM           
-                             (id_ex_opcode == 7'b0110111) ? id_ex_imm : // LUI (Immediate)        
-                             alu_result; // Default for R-Type and I-Type ALU
-
 
 //***********
 
