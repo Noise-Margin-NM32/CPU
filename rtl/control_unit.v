@@ -1,7 +1,7 @@
 module control_unit(
 
     input [31:0] instr,
-    input status_z,
+    // input status_z,
 
     // now this control unit, based on input generates 
     // all the values of the signals to all the other modules 
@@ -9,20 +9,24 @@ module control_unit(
     output reg [4:0] reg_sel_a,
     output reg [4:0] reg_sel_b, // to register file reading register number
     output reg en_write, // to register file write enable
+    // output reg load_instr,
 
     output reg [4:0] write_reg, // register choosen to be written in the register file
     output reg [3:0] alu_op,
 
-    output reg [31:0] data_in, // jump address to program counter
-    output reg [31:0] addr, // address to be read from memeory 
+    // output reg [31:0] data_in, // jump address to program counter
+    // output reg [31:0] addr, // address to be read from memeory 
 
-    output reg en, // enable to pc
-    output reg load, // pc for jump commnad 
+    // output reg en, // enable to pc
+    // output reg load, // pc for jump commnad 
     output reg write_en, // enable to write in the memory 
 
     output reg [19:0] imm, // immediate value 
     
-    output reg alu_en // enable alu computation
+    output reg alu_en, // enable alu computation
+
+    output reg [2:0] instr_type, // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J      
+    output reg [2:0] load_size // to identify the size of the data to be loaded (byte, half-word, word) 00-byte, 01-half-word, 10-word
 
 );
 
@@ -51,8 +55,9 @@ module control_unit(
 
 always @(*) begin
     en_write =0;
-    en =1;
-    load =0;
+    // en =1;
+    // load =0;
+    // load_instr =0;
 
     alu_op = 4'b0000;
     write_en =0;
@@ -69,7 +74,9 @@ always @(*) begin
             reg_sel_b = instr[24:20];
             write_reg = instr[11:7];
             imm = 20'h00000; // no immediate value for R type instructions
-            alu_en = 1;
+            alu_en = 1'b1;
+            instr_type = 3'b000; // R type instruction
+            write_en = 1'b0; // no write to memory for R type instructions
 
             case (instr[14:12])
                 3'b000: begin
@@ -117,10 +124,63 @@ always @(*) begin
                 3'b111: begin // AND rd = rs1 & rs2
                     alu_op = 4'b1001;
                 end
-
             endcase
+
             en_write=1;
         end 
+
+        7'b0000011: begin   // IL- Type instructions (Load)
+            write_reg = instr[11:7];
+            reg_sel_a = instr[19:15];
+            reg_sel_b = 5'b00000; 
+            write_en = 1'b0; // no write to memory for load instructions
+
+            imm = {{8{instr[31]}}, instr[31:20]}; // immediate value for I type instructions: SignExt{imm[11:0]}
+
+            // load_instr = 1;
+            instr_type = 3'b001; // IL type instruction
+            alu_op = 4'b0000; // ADD / SUB operation to calculate address
+            en_write = 1;
+            alu_en = 1;
+            case(instr[14:12])
+                3'b000: load_size = 3'b000; //LB: rd = Mem[rs1 + imm]
+                3'b001: load_size = 3'b001; //LH: rd = Mem[rs1 + imm]
+                3'b010: load_size = 3'b010; //LW: rd = Mem[rs1 + imm]
+                3'b100: load_size = 3'b011; //LBU: rd = Mem[rs1 + imm]
+                3'b101: load_size = 3'b100; //LHU: rd = Mem[rs1 + imm]
+            endcase
+        end
+
+        7'b0010011: begin   // IA- Type instructions (Immediate Arithmetic) 
+            write_reg = instr[11:7];
+            reg_sel_a = instr[19:15];
+            reg_sel_b = 5'b00000; 
+            write_en = 1'b0; // no write to memory for load instructions
+
+            imm = {{8{instr[31]}}, instr[31:20]}; // immediate value for I type instructions: SignExt{imm[11:0]}
+
+            // load_instr = 1;
+            instr_type = 3'b010; // IA type instruction
+            en_write = 1;
+            alu_en = 1;
+
+            case(instr[14:12])
+                3'b000: alu_op = 4'b0000; // ADDI: rd = rs1 + signExt(imm)
+                3'b001: alu_op = 4'b0010; // SLLI: rd = (rs1 << uimm)
+                3'b010: alu_op = 4'b0011; // SLTI: rd = (rs1 < signExt(imm))
+                3'b011: alu_op = 4'b0100; // SLTIU: rd = (rs1 < signExt(imm)) unsigned
+                3'b100: alu_op = 4'b0101; // XORI: rd = rs1 ^ signExt(imm)
+                3'b101: begin
+                    case(instr[31:25])
+                        7'b0000000: alu_op = 4'b0110; // SRLI: rd = (rs1 >> uimm)
+                        7'b0100000: alu_op = 4'b0111; // SRAI: rd = (rs1 >> uimm) arithmetic
+                    endcase
+                end
+                3'b110: alu_op = 4'b1000; // ORI: rd = rs1 | signExt(imm)
+                3'b111: alu_op = 4'b1001; // ANDI: rd = rs1 & signExt(imm)
+            endcase
+        end
+
 
         // 4'h1: begin // ADD: Reg[Dest] = Reg[Dest] + Reg[Src]
         //     reg_sel_a = instr[11:9];
