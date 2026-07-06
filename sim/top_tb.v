@@ -50,8 +50,18 @@ module top_tb();
     uut.ROM.rom[20] = 32'h0050AD03; // lw x26, 5(x1)
     uut.ROM.rom[21] = 32'h0050CD83; // lbu x27, 5(x1)
     uut.ROM.rom[22] = 32'h0050DE03; // lhu x28, 5(x1)
-    
-//    uut.pc_inst.pc_en = 1'b1;
+
+    // S-Type (Store) Instructions (Base x1=5)
+    uut.mem.ram[17] = 32'hA5A5A5A5; // Initial value at addr 17
+    uut.mem.ram[18] = 32'h5A5A5A5A; // Initial value at addr 18
+    uut.mem.ram[19] = 32'h12345678; // Initial value at addr 19
+
+    // sw x3, 12(x1) -> RAM[17] = x3 (7)
+    uut.ROM.rom[23] = 32'h0030A623;
+    // sh x3, 13(x1) -> RAM[18][15:0] = x3[15:0] (7)
+    uut.ROM.rom[24] = 32'h003096A3;
+    // sb x3, 14(x1) -> RAM[19][7:0] = x3[7:0] (7)
+    uut.ROM.rom[25] = 32'h00308723;
 
 
     #1000
@@ -242,6 +252,27 @@ module top_tb();
         $display("Test 23 Failed: LHU");
     end
     $display("Expected: 0x0000CDEF, Got: 0x%h", uut.reg_file.registers[28]);
+    $display("--------------------");
+    
+    // Test 24: SW
+    if (uut.mem.ram[17] == 32'h00000007) begin
+        $display("Test 24 Passed: SW");
+    end else begin
+        $display("Test 24 Failed: SW");
+    end
+    $display("Expected: 0x00000007, Got: 0x%h", uut.mem.ram[17]);
+    $display("--------------------");
+
+    // Test 25: SH
+    if(uut.mem.ram[18] == 32'h5a5a0007) $display("Test 25 Passed: SH");
+    else $display("Test 25 Failed: SH");
+    $display("Expected: 0x5a5a0007, Got: 0x%h", uut.mem.ram[18]);
+    $display("--------------------");
+
+    // Test 26: SB
+    if(uut.mem.ram[19] == 32'h12345607) $display("Test 26 Passed: SB");
+    else $display("Test 26 Failed: SB");
+    $display("Expected: 0x12345607, Got: 0x%h", uut.mem.ram[19]);
     $display("--------------------");
 
         $finish;
