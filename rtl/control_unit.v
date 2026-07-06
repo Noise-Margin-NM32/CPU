@@ -25,7 +25,7 @@ module control_unit(
     
     output reg alu_en, // enable alu computation
 
-    output reg [3:0] instr_type, // to identify the type of instruction (R, I, S, B, U, J) 0000-R, 0001-IL, 0010-IA, 0011-S, 0100-B, 0101-U, 0110-J      
+    output reg [3:0] instr_type, // to identify the type of instruction (R, I, S, B, U, J) 0000-R, 0001-IL, 0010-IA, 0011-S, 0100-B_1st, 0101-B-2nd, 0110-U, 0111-J      
     output reg [2:0] load_size // to identify the size of the data to be loaded (byte, half-word, word) 00-byte, 01-half-word, 10-word
 
 );
@@ -61,6 +61,7 @@ always @(*) begin
 
     alu_op = 4'b0000;
     write_en =0;
+    en_write =0;
 
     imm = 20'h00000;
     alu_en = 0;
@@ -181,7 +182,8 @@ always @(*) begin
             endcase
         end
 
-        7'b0100011: begin
+        7'b0100011: begin   //S type instructions (Store)
+            write_reg = 5'b00000; // no write to register file for store instructions
             write_en = 1'b1;
             reg_sel_a = instr[19:15];
             reg_sel_b = instr[24:20];
@@ -197,6 +199,51 @@ always @(*) begin
             endcase
 
             
+        end
+
+        7'b1100011: begin  // B type instructions (Branch)/
+            write_reg = 5'b00000; // no write to register file for branch instructions
+            write_en = 1'b0; // no write to memory for branch instructions
+            reg_sel_a = instr[19:15];
+            reg_sel_b = instr[24:20];
+            imm = {{7{instr[31]}}, instr[31], instr[7], instr[30:25], instr[11:8], 1'b0}; // SignExt{imm[12|10:5|4:1|11|0]}
+            alu_en = 1'b1;
+            // alu_op = 4'b0001; // SUB operation to compare rs1 and rs2
+            // write_en = 1'b0; // no write to memory for branch instructions
+            // instr_type = 4'b0100; // B type instruction
+            if (instr_type == 4'b0100) begin
+                instr_type = 4'b0101; // B type instruction (2nd part)
+                alu_op = 4'b0000; // ADD operation to calculate branch target address 
+            end
+            else begin
+                instr_type = 4'b0100;
+                case(instr[14:12])
+                    3'b000: begin 
+                        alu_op = 4'b0001; // BEQ: if (rs1 == rs2) pc = pc + imm
+                        load_size = 3'b000; // using the same lines to see if need to check zero flag or negate zero flag
+                    end
+                    3'b001: begin 
+                        alu_op = 4'b0001;
+                        load_size = 3'b001; // BNE: if (rs1 != rs2) pc = pc + imm
+                    end
+                    3'b100: begin   //BLT: if (rs1 < rs2) pc = pc + imm
+                        alu_op = 4'b0011;
+                        load_size = 3'b000;
+                    end
+                    3'b101: begin   //BGE: if (rs1 >= rs2) pc = pc + imm
+                        alu_op = 4'b0011;
+                        load_size = 3'b001;
+                    end
+                    3'b110: begin   //BLTU: if (rs1 < rs2) pc = pc + imm (unsigned)
+                        alu_op = 4'b0100;
+                        load_size = 3'b000;
+                    end
+                    3'b111: begin   //BGEU: if (rs1 >= rs2) pc = pc + imm (unsigned)
+                        alu_op = 4'b0100;
+                        load_size = 3'b001;
+                    end
+                endcase
+            end
         end
 
 

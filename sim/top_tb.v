@@ -63,6 +63,57 @@ module top_tb();
     // sb x3, 14(x1) -> RAM[19][7:0] = x3[7:0] (7)
     uut.ROM.rom[25] = 32'h00308723;
 
+    // Test 27: BEQ Not Taken (x1=5, x2=3 are not equal)
+    uut.ROM.rom[26] = 32'h00208663; // beq x1, x2, 12 (Not Taken, PC goes to 27)
+    uut.ROM.rom[27] = 32'h00A00F13; // addi x30, x0, 10 (executed, x30 = 10)
+    uut.ROM.rom[28] = 32'h00000013; // nop
+    uut.ROM.rom[29] = 32'h00000013; // nop
+
+    // Setup x29 = 5 for Test 28
+    uut.reg_file.registers[29] = 32'h00000005;
+
+    // Test 28: BEQ Taken (x1=5, x29=5 are equal)
+    uut.ROM.rom[30] = 32'h01D08863; // beq x1, x29, 16 (Taken, PC goes to index 34)
+    uut.ROM.rom[31] = 32'h01400F93; // addi x31, x0, 20 (should be skipped, so x31 remains 0 or doesn't get 20)
+    uut.ROM.rom[32] = 32'h00000013; // nop
+    uut.ROM.rom[33] = 32'h00000013; // nop
+    uut.ROM.rom[34] = 32'h01E00F93; // addi x31, x0, 30 (executed, x31 = 30)
+
+    // Test 29: BNE Taken (x1=5, x2=3 are not equal)
+    uut.ROM.rom[35] = 32'h00209863; // bne x1, x2, 16 (Taken, PC goes to index 39)
+    uut.ROM.rom[36] = 32'h02800093; // addi x1, x0, 40 (should be skipped)
+    uut.ROM.rom[37] = 32'h00000013; // nop
+    uut.ROM.rom[38] = 32'h00000013; // nop
+    uut.ROM.rom[39] = 32'h03200093; // addi x1, x0, 50 (executed, x1 = 50)
+
+
+    // Test 30: BLT Taken (x5=-5, x4=-2 are signed, -5 < -2 is true)
+    uut.ROM.rom[40] = 32'h0042C863; // blt x5, x4, 16 (Taken, PC goes to index 44)
+    uut.ROM.rom[41] = 32'h04600113; // addi x2, x0, 70 (should be skipped)
+    uut.ROM.rom[42] = 32'h00000013; // nop
+    uut.ROM.rom[43] = 32'h00000013; // nop
+    uut.ROM.rom[44] = 32'h03C00113; // addi x2, x0, 60 (executed, x2 = 60)
+
+    // Test 31: BGE Taken (x4=-2, x5=-5 are signed, -2 >= -5 is true)
+    uut.ROM.rom[45] = 32'h0052D863; // bge x4, x5, 16 (Taken, PC goes to index 49)
+    uut.ROM.rom[46] = 32'h05A00193; // addi x3, x0, 90 (should be skipped)
+    uut.ROM.rom[47] = 32'h00000013; // nop
+    uut.ROM.rom[48] = 32'h00000013; // nop
+    uut.ROM.rom[49] = 32'h05000193; // addi x3, x0, 80 (executed, x3 = 80)
+
+    // Test 32: BLTU Not Taken (x4=100, x1=50 are unsigned, 100 < 50 is false)
+    uut.ROM.rom[50] = 32'h00126863; // bltu x4, x1, 16 (Not Taken, PC goes to 51)
+    uut.ROM.rom[51] = 32'h06400213; // addi x4, x0, 100 (executed, x4 = 100)
+    uut.ROM.rom[52] = 32'h00000013; // nop
+    uut.ROM.rom[53] = 32'h00000013; // nop
+    uut.ROM.rom[54] = 32'h06E00E93; // addi x29, x0, 110 (should be skipped)
+
+    // Test 33: BGEU Taken (x4=100, x1=50 are unsigned, 100 >= 50 is true)
+    uut.ROM.rom[55] = 32'h00127863; // bgeu x4, x1, 16 (Taken, PC goes to index 59)
+    uut.ROM.rom[56] = 32'h08200293; // addi x5, x0, 130 (should be skipped)
+    uut.ROM.rom[57] = 32'h00000013; // nop
+    uut.ROM.rom[58] = 32'h00000013; // nop
+    uut.ROM.rom[59] = 32'h07800293; // addi x5, x0, 120 (executed, x5 = 120)
 
     #1000
 
@@ -273,6 +324,69 @@ module top_tb();
     if(uut.mem.ram[19] == 32'h12345607) $display("Test 26 Passed: SB");
     else $display("Test 26 Failed: SB");
     $display("Expected: 0x12345607, Got: 0x%h", uut.mem.ram[19]);
+    $display("--------------------");
+
+    // Test 27: BEQ Not Taken
+    if (uut.reg_file.registers[30] == 32'h0000000A) begin
+        $display("Test 27 Passed: BEQ Not Taken");
+    end else begin
+        $display("Test 27 Failed: BEQ Not Taken");
+    end
+    $display("Expected: 0x0000000A, Got: 0x%h", uut.reg_file.registers[30]);
+    $display("--------------------");
+
+    // Test 28: BEQ Taken
+    if (uut.reg_file.registers[31] == 32'h0000001E) begin
+        $display("Test 28 Passed: BEQ Taken");
+    end else begin
+        $display("Test 28 Failed: BEQ Taken");
+    end
+    $display("Expected: 0x0000001E, Got: 0x%h", uut.reg_file.registers[31]);
+    $display("--------------------");
+
+    // Test 29: BNE Taken
+    if (uut.reg_file.registers[1] == 32'h00000032) begin
+        $display("Test 29 Passed: BNE Taken");
+    end else begin
+        $display("Test 29 Failed: BNE Taken");
+    end
+    $display("Expected: 0x00000032, Got: 0x%h", uut.reg_file.registers[1]);
+    $display("--------------------");
+
+    // Test 30: BLT Taken
+    if (uut.reg_file.registers[2] == 32'h0000003C) begin
+        $display("Test 30 Passed: BLT Taken");
+    end else begin
+        $display("Test 30 Failed: BLT Taken");
+    end
+    $display("Expected: 0x0000003C, Got: 0x%h", uut.reg_file.registers[2]);
+    $display("--------------------");
+
+    // Test 31: BGE Taken
+    if (uut.reg_file.registers[3] == 32'h00000050) begin
+        $display("Test 31 Passed: BGE Taken");
+    end else begin
+        $display("Test 31 Failed: BGE Taken");
+    end
+    $display("Expected: 0x00000050, Got: 0x%h", uut.reg_file.registers[3]);
+    $display("--------------------");
+
+    // Test 32: BLTU Not Taken
+    if (uut.reg_file.registers[4] == 32'h00000064) begin
+        $display("Test 32 Passed: BLTU Not Taken");
+    end else begin
+        $display("Test 32 Failed: BLTU Not Taken");
+    end
+    $display("Expected: 0x00000064, Got: 0x%h", uut.reg_file.registers[4]);
+    $display("--------------------");
+
+    // Test 33: BGEU Taken
+    if (uut.reg_file.registers[5] == 32'h00000078) begin
+        $display("Test 33 Passed: BGEU Taken");
+    end else begin
+        $display("Test 33 Failed: BGEU Taken");
+    end
+    $display("Expected: 0x00000078, Got: 0x%h", uut.reg_file.registers[5]);
     $display("--------------------");
 
         $finish;
