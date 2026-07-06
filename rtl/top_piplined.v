@@ -70,7 +70,7 @@ wire cu_alu_en; // alu enable returned by cu
 // wire [31:0] addr; // address to be read from mem by the cu 
 // wire write_en; // write enable returned by the cu to the mem module 
 // wire load_instr;
-wire [2:0] instr_type; // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J
+wire [3:0] instr_type; // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J
 wire [2:0] load_size; // to identify the size of the data to be loaded (byte, half-word, word) 00-byte, 01-half-word, 10
 
 
@@ -85,7 +85,7 @@ reg id_ex_write_en; // write enable to write in mem after decoded in cpu
 
 reg [19:0] id_ex_imm;//???
 
-reg [2:0] id_ex_instr_type; // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J
+reg [3:0] id_ex_instr_type; // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J
 reg [2:0] id_ex_load_size; // to identify the size of the data
 reg id_ex_alu_en;
 reg id_ex_zero_flag;
@@ -121,10 +121,11 @@ always @(posedge clk) begin
         id_ex_alu_op <= 4'b0000;
         id_ex_reg_sel_a <=0;
         id_ex_reg_sel_b <=0;
-        id_ex_en_write <=0;
+        id_ex_en_write <= 0;
+        id_ex_write_en <= 0;
         id_ex_imm <= 20'b00000000000000000000;
         id_ex_write_reg <= 5'b00000;
-        id_ex_instr_type <= 3'b000;
+        id_ex_instr_type <= 4'b0000;
         id_ex_load_size <= 3'b000;
         id_ex_alu_en <= 1'b0;
         // id_ex_zero_flag <= 1'b0;
@@ -178,38 +179,47 @@ wire [31:0] read_data1,read_data2; //coming by reading the register-- can either
 wire [31:0] addr; // address to be read from mem by the cu
 wire [31:0] data_out; // data read from the mem to the ........
 
-assign alu_A = (id_ex_instr_type == 3'b000) ? read_data1 :
-               (id_ex_instr_type == 3'b001) ? read_data1 :
-               (id_ex_instr_type == 3'b010) ? read_data1 :
-               (id_ex_instr_type == 3'b011) ? read_data1 :
-               (id_ex_instr_type == 3'b100) ? read_data1 :
-               (id_ex_instr_type == 3'b101) ? read_data1 : 
-               (id_ex_instr_type == 3'b110) ? read_data1 : 32'h00000000;
+assign alu_A = (id_ex_instr_type == 4'b0000) ? read_data1 :
+               (id_ex_instr_type == 4'b0001) ? read_data1 :
+               (id_ex_instr_type == 4'b0010) ? read_data1 :
+               (id_ex_instr_type == 4'b0011) ? read_data1 :
+               (id_ex_instr_type == 4'b0100) ? read_data1 :
+               (id_ex_instr_type == 4'b0101) ? read_data1 : 
+               (id_ex_instr_type == 4'b0110) ? read_data1 : 32'h00000000;
 
-assign alu_B = (id_ex_instr_type == 3'b000) ? read_data2 :
-               (id_ex_instr_type == 3'b001) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for IL-type
-               (id_ex_instr_type == 3'b010) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for IA-type
-               (id_ex_instr_type == 3'b011) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for S-type
-               (id_ex_instr_type == 3'b100) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for B-type
-               (id_ex_instr_type == 3'b101) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 
-               (id_ex_instr_type == 3'b110) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 32'h00000000; // Sign-extend immediate for J-type
+assign alu_B = (id_ex_instr_type == 4'b0000) ? read_data2 :
+               (id_ex_instr_type == 4'b0001) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for IL-type
+               (id_ex_instr_type == 4'b0010) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for IA-type
+               (id_ex_instr_type == 4'b0011) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for S-type
+               (id_ex_instr_type == 4'b0100) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for B-type
+               (id_ex_instr_type == 4'b0101) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 
+               (id_ex_instr_type == 4'b0110) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 32'h00000000; // Sign-extend immediate for J-type
 
 
-assign write_back_data = (id_ex_instr_type == 3'b000) ? alu_result : 
-                        (id_ex_instr_type == 3'b001) ?  (id_ex_load_size == 3'b000) ? {{24{data_out[7]}}, data_out[7:0]} : 
+assign write_back_data = (id_ex_instr_type == 4'b0000) ? alu_result : 
+                        (id_ex_instr_type == 4'b0001) ?  (id_ex_load_size == 3'b000) ? {{24{data_out[7]}}, data_out[7:0]} : 
                                                         (id_ex_load_size == 3'b001) ? {{16{data_out[15]}}, data_out[15:0]} :
                                                         (id_ex_load_size == 3'b010) ? data_out :
                                                         (id_ex_load_size == 3'b011) ? {24'b0, data_out[7:0]} : 
                                                         (id_ex_load_size == 3'b100) ? {16'b0, data_out[15:0]} : 
                                                         data_out :
-                        (id_ex_instr_type == 3'b010) ? alu_result : 
-                        (id_ex_instr_type == 3'b011) ? data_out : 
-                        (id_ex_instr_type == 3'b100) ? alu_result : 
-                        (id_ex_instr_type == 3'b101) ? alu_result : 
-                        (id_ex_instr_type == 3'b110) ? alu_result : 32'h00000000;
+                        (id_ex_instr_type == 4'b0010) ? alu_result : 
+                        (id_ex_instr_type == 4'b0011) ? data_out : 
+                        (id_ex_instr_type == 4'b0100) ? alu_result : 
+                        (id_ex_instr_type == 4'b0101) ? alu_result : 
+                        (id_ex_instr_type == 4'b0110) ? alu_result : 32'h00000000;
 
-assign addr = (id_ex_instr_type == 3'b001) ? alu_result : 
-                       (id_ex_instr_type == 3'b011) ? alu_result : 32'h00000000;
+assign addr = (id_ex_instr_type == 4'b0001) ? alu_result : 
+              (id_ex_instr_type == 4'b0011) ? alu_result : 32'h00000000;
+
+wire [3:0] byte_en;
+assign byte_en = (id_ex_instr_type == 4'b0011) ? (
+                     (id_ex_load_size == 3'b000) ? 4'b0001 : // SB
+                     (id_ex_load_size == 3'b001) ? 4'b0011 : // SH
+                     (id_ex_load_size == 3'b010) ? 4'b1111 : 4'b0000 // SW
+                 ) : 4'b0000;
+
+assign write_data = read_data2; 
 
 data_mem mem(
 
@@ -217,6 +227,7 @@ data_mem mem(
     .clk(clk),
     .addr(addr), // this addr can come for stage 2( directly) or in stage 3 
     .write_en(id_ex_write_en),
+    .byte_en(byte_en),
     .write_data(write_data), // **** wrtie back from Execute stage
     
     // output

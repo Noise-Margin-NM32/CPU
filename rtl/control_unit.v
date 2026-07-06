@@ -25,7 +25,7 @@ module control_unit(
     
     output reg alu_en, // enable alu computation
 
-    output reg [2:0] instr_type, // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J      
+    output reg [3:0] instr_type, // to identify the type of instruction (R, I, S, B, U, J) 0000-R, 0001-IL, 0010-IA, 0011-S, 0100-B, 0101-U, 0110-J      
     output reg [2:0] load_size // to identify the size of the data to be loaded (byte, half-word, word) 00-byte, 01-half-word, 10-word
 
 );
@@ -75,7 +75,7 @@ always @(*) begin
             write_reg = instr[11:7];
             imm = 20'h00000; // no immediate value for R type instructions
             alu_en = 1'b1;
-            instr_type = 3'b000; // R type instruction
+            instr_type = 4'b0000; // R type instruction
             write_en = 1'b0; // no write to memory for R type instructions
 
             case (instr[14:12])
@@ -138,7 +138,7 @@ always @(*) begin
             imm = {{8{instr[31]}}, instr[31:20]}; // immediate value for I type instructions: SignExt{imm[11:0]}
 
             // load_instr = 1;
-            instr_type = 3'b001; // IL type instruction
+            instr_type = 4'b0001; // IL type instruction
             alu_op = 4'b0000; // ADD / SUB operation to calculate address
             en_write = 1;
             alu_en = 1;
@@ -160,7 +160,7 @@ always @(*) begin
             imm = {{8{instr[31]}}, instr[31:20]}; // immediate value for I type instructions: SignExt{imm[11:0]}
 
             // load_instr = 1;
-            instr_type = 3'b010; // IA type instruction
+            instr_type = 4'b0010; // IA type instruction
             en_write = 1;
             alu_en = 1;
 
@@ -180,6 +180,26 @@ always @(*) begin
                 3'b111: alu_op = 4'b1001; // ANDI: rd = rs1 & signExt(imm)
             endcase
         end
+
+        7'b0100011: begin
+            write_en = 1'b1;
+            reg_sel_a = instr[19:15];
+            reg_sel_b = instr[24:20];
+            imm = {{8{instr[31]}}, instr[31:25], instr[11:7]};
+            instr_type = 4'b0011;
+            alu_en = 1'b1;
+            alu_op = 4'b0000;
+
+            case(instr[14:12])
+                3'b000: load_size = 3'b000;//SB
+                3'b001: load_size = 3'b001;//SH
+                3'b010: load_size = 3'b010;//SW
+            endcase
+
+            
+        end
+
+
 
 
         // 4'h1: begin // ADD: Reg[Dest] = Reg[Dest] + Reg[Src]
