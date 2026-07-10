@@ -21,17 +21,18 @@ module top_piplined(
 wire en, jump; // en- pc enable  
 wire [31:0] d_in; // addr to jump 
 wire [31:0] pc;
+wire branch_taken; // branch decision wire
 
 
 assign en = 1'b1; // always enable the pc to increment
-assign jump = 1'b0; // no jump in this design, for now
+// assign jump = 1'b0; // no jump in this design, for now
 
 wire [31:0] instruction; // ROM: instruction retruned from ROM
 
 
 // Pipline Register; IF/ID Register 
 reg [31:0] if_id_instr;
-
+reg [31:0] if_id_pc; // pc value to be passed to the next stage (ID) for branch and jump instructions
 
 program_counter pc_inst(
     // input 
@@ -50,9 +51,14 @@ instruction_mem ROM(
 
 // if_id 
 always @(posedge clk) begin
-    if(!rst || jump ) if_id_instr <= 32'h00000000;
-    else if_id_instr <= instruction;
-
+    if(!rst || jump || branch_taken) begin
+        if_id_instr <= 32'h00000000;
+        if_id_pc    <= 32'h00000000;
+    end
+    else begin 
+        if_id_instr <= instruction;
+        if_id_pc <= pc;
+    end
 end 
 
 
@@ -64,7 +70,7 @@ end
 wire [4:0] reg_sel_a, reg_sel_b; // register numebr retutned from the control unit after decoding the instruction 
 wire en_write;// coming from cu to register file 
 wire [4:0] write_reg; // choosen write reg by cu to register file 
-wire [3:0] alu_op; //
+wire [4:0] alu_op; //
 wire [19:0] imm; // immediate value
 wire cu_alu_en; // alu enable returned by cu
 // wire [31:0] addr; // address to be read from mem by the cu 
@@ -77,7 +83,7 @@ wire [2:0] load_size; // to identify the size of the data to be loaded (byte, ha
 // -- PIpline Register: ID/EXECUTE
 
 reg [4:0] id_ex_write_reg; // choosen write reg by cu to register file 
-reg [3:0] id_ex_alu_op; //alu_opcode
+reg [4:0] id_ex_alu_op; //alu_opcode
 reg [4:0] id_ex_reg_sel_a,id_ex_reg_sel_b; // register selectors returned by the control unit  
 reg id_ex_en_write; // write enable returned by the cu to the mem module 
 // reg [31:0] id_ex_data_out;
@@ -89,6 +95,7 @@ reg [3:0] id_ex_instr_type; // to identify the type of instruction (R, I, S, B, 
 reg [2:0] id_ex_load_size; // to identify the size of the data
 reg id_ex_alu_en;
 reg id_ex_zero_flag;
+reg [31:0] id_ex_pc; // pc value to be passed to the next stage (ID) for branch and jump instructions
 
 
 control_unit cu(
@@ -129,6 +136,7 @@ always @(posedge clk) begin
         id_ex_load_size <= 3'b000;
         id_ex_alu_en <= 1'b0;
         // id_ex_zero_flag <= 1'b0;
+        id_ex_pc <= 32'h00000000;
 
     end 
 
@@ -144,21 +152,38 @@ always @(posedge clk) begin
         // id_ex_imm <= if_id_imm;
         // id_ex_addr <=  addr;
         // id_ex_alu_en <= cu_alu_en;
+        if( branch_taken ) begin
+            id_ex_alu_op <= 4'b0000;
+            id_ex_reg_sel_a <=id_ex_reg_sel_a;
+            id_ex_reg_sel_b <=id_ex_reg_sel_b;
+            id_ex_en_write <= 0;
+            id_ex_write_en <= 0;
+            id_ex_imm <= id_ex_imm;
+            id_ex_write_reg <= id_ex_write_reg;
+            id_ex_instr_type <= (id_ex_instr_type == 4'b0100) ? 4'b0101 :
+                                (id_ex_instr_type == 4'b1000) ? 4'b1010 :
+                                (id_ex_instr_type == 4'b1001) ? 4'b1011 : id_ex_instr_type;
+            id_ex_load_size <= id_ex_load_size;
+            id_ex_alu_en <= 1'b1;
+            // id_ex_zero_flag <= 1'b0;
+            id_ex_pc <= id_ex_pc;
 
-        id_ex_alu_op <= alu_op;
-        id_ex_reg_sel_a <= reg_sel_a;
-        id_ex_reg_sel_b <= reg_sel_b;
-        id_ex_en_write <= en_write;
-        id_ex_write_en <= write_en;
-        id_ex_imm <= imm;
-        id_ex_write_reg <= write_reg;
-        id_ex_instr_type <= instr_type;
-        id_ex_load_size <= load_size;
-        id_ex_alu_en <= cu_alu_en;
-        // id_ex_zero_flag <= zero_flag;
-
+        end
+        else begin
+            id_ex_alu_op <= alu_op;
+            id_ex_reg_sel_a <= reg_sel_a;
+            id_ex_reg_sel_b <= reg_sel_b;
+            id_ex_en_write <= en_write;
+            id_ex_write_en <= write_en;
+            id_ex_imm <= imm;
+            id_ex_write_reg <= write_reg;
+            id_ex_instr_type <= instr_type;
+            id_ex_load_size <= load_size;
+            id_ex_alu_en <= cu_alu_en;
+            // id_ex_zero_flag <= zero_flag;
+            id_ex_pc <= if_id_pc;
+        end
     end
-
 end
 
 
@@ -184,16 +209,24 @@ assign alu_A = (id_ex_instr_type == 4'b0000) ? read_data1 :
                (id_ex_instr_type == 4'b0010) ? read_data1 :
                (id_ex_instr_type == 4'b0011) ? read_data1 :
                (id_ex_instr_type == 4'b0100) ? read_data1 :
-               (id_ex_instr_type == 4'b0101) ? read_data1 : 
-               (id_ex_instr_type == 4'b0110) ? read_data1 : 32'h00000000;
+               (id_ex_instr_type == 4'b0101) ? id_ex_pc : 
+               (id_ex_instr_type == 4'b0110) ? id_ex_pc :
+               (id_ex_instr_type == 4'b1000) ? id_ex_pc :
+               (id_ex_instr_type == 4'b1001) ? id_ex_pc :
+               (id_ex_instr_type == 4'b1010) ? id_ex_pc :
+               (id_ex_instr_type == 4'b1011) ? read_data1 : 32'h00000000;
 
 assign alu_B = (id_ex_instr_type == 4'b0000) ? read_data2 :
                (id_ex_instr_type == 4'b0001) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for IL-type
                (id_ex_instr_type == 4'b0010) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for IA-type
                (id_ex_instr_type == 4'b0011) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for S-type
-               (id_ex_instr_type == 4'b0100) ? {{12{id_ex_imm[19]}}, id_ex_imm} : // Sign-extend immediate for B-type
+               (id_ex_instr_type == 4'b0100) ? read_data2 : // Sign-extend immediate for B-type
                (id_ex_instr_type == 4'b0101) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 
-               (id_ex_instr_type == 4'b0110) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 32'h00000000; // Sign-extend immediate for J-type
+               (id_ex_instr_type == 4'b0110) ? {id_ex_imm, 12'h000} :
+               (id_ex_instr_type == 4'b1000) ? 32'h00000004 :
+               (id_ex_instr_type == 4'b1001) ? 32'h00000004 :
+               (id_ex_instr_type == 4'b1010) ? {{11{id_ex_imm[19]}}, id_ex_imm, 1'b0} :
+               (id_ex_instr_type == 4'b1011) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 32'h00000000; // Sign-extend immediate for J-type
 
 
 assign write_back_data = (id_ex_instr_type == 4'b0000) ? alu_result : 
@@ -205,9 +238,12 @@ assign write_back_data = (id_ex_instr_type == 4'b0000) ? alu_result :
                                                         data_out :
                         (id_ex_instr_type == 4'b0010) ? alu_result : 
                         (id_ex_instr_type == 4'b0011) ? data_out : 
-                        (id_ex_instr_type == 4'b0100) ? alu_result : 
-                        (id_ex_instr_type == 4'b0101) ? alu_result : 
-                        (id_ex_instr_type == 4'b0110) ? alu_result : 32'h00000000;
+                        (id_ex_instr_type == 4'b0100) ? 32'h00000000 : 
+                        (id_ex_instr_type == 4'b0101) ? 32'h00000000 : 
+                        (id_ex_instr_type == 4'b0110) ? alu_result :
+                        (id_ex_instr_type == 4'b0111) ? {id_ex_imm, 12'h000} :
+                        (id_ex_instr_type == 4'b1000) ? alu_result :
+                        (id_ex_instr_type == 4'b1001) ? alu_result : 32'h00000000;
 
 assign addr = (id_ex_instr_type == 4'b0001) ? alu_result : 
               (id_ex_instr_type == 4'b0011) ? alu_result : 32'h00000000;
@@ -220,6 +256,17 @@ assign byte_en = (id_ex_instr_type == 4'b0011) ? (
                  ) : 4'b0000;
 
 assign write_data = read_data2; 
+
+wire comparison_out;
+assign comparison_out = (id_ex_alu_op == 4'b0001) ? zero_flag : alu_result[0];
+
+assign branch_taken = ((id_ex_instr_type == 4'b0100) && 
+                      ((id_ex_load_size == 3'b000) ? comparison_out : !comparison_out)) ||
+                      (id_ex_instr_type == 4'b1000) || (id_ex_instr_type == 4'b1001); // Branch taken for B-type, JAL, and JALR instructions
+
+assign jump = (id_ex_instr_type == 4'b0101) || (id_ex_instr_type == 4'b1010) || (id_ex_instr_type == 4'b1011);
+
+assign d_in = (id_ex_instr_type == 4'b1011) ? {alu_result[31:1], 1'b0} : alu_result;
 
 data_mem mem(
 
