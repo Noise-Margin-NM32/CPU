@@ -7,7 +7,7 @@ module instruction_mem(
 reg [31:0] rom [255:0];
 
 initial begin
-    $readmemh("/home/omkar/8bit_CPU_pipline/firmware/program.txt",rom);// loads the hex code
+    $readmemh("/home/omkar/8bit_CPU_pipline/firmware/program.hex",rom);// loads the hex code
 end
 
 assign ins_out = rom[addr[9:2]]; // use the lower bit of pc

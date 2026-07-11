@@ -59,7 +59,7 @@ always @(*) begin
     // load =0;
     // load_instr =0;
 
-    alu_op = 5'b00000;
+    // alu_op = 5'b00000;
     write_en =0;
     en_write =0;
 
@@ -93,25 +93,29 @@ always @(*) begin
                 end
 
                 3'b001: begin
-                    if(instr[31:25] == 7'b00000001) alu_op = 5'b01011; // MULH rd = (rs1 * rs2) >> 32
+                    if(instr[31:25] == 7'b0000001) 
+                        alu_op = 5'b01011; // MULH rd = (rs1 * rs2) >> 32
                     else
                         alu_op = 5'b00010; // SLL rd = rs1 << rs2               
                 end
 
                 3'b010: begin 
-                if(instr[31:25] == 7'b00000001) alu_op = 5'b01100; // MULSU rd = (rs1 * rs2) >> 32
-                    else
-                        alu_op = 5'b00011;// SLT rd = rs1 < rs2
+                if(instr[31:25] == 7'b0000001) 
+                    alu_op = 5'b01100; // MULSU rd = (rs1 * rs2) >> 32
+                else
+                    alu_op = 5'b00011;// SLT rd = rs1 < rs2
                 end
 
                 3'b011: begin
-                    if(instr[31:25] == 7'b00000001) alu_op = 5'b01101; // MULU rd = (rs1 * rs2) >> 32
+                    if(instr[31:25] == 7'b0000001) 
+                        alu_op = 5'b01101; // MULU rd = (rs1 * rs2) >> 32
                     else 
                         alu_op = 5'b00100;// SLTU rd = rs1 < rs2 (unsigned)
                 end
 
                 3'b100: begin 
-                    if(instr[31:25] == 7'b00000001) alu_op = 5'b01110; // DIV rd = (rs1 / rs2)
+                    if(instr[31:25] == 7'b0000001) 
+                        alu_op = 5'b01110; // DIV rd = (rs1 / rs2)
                     else 
                         alu_op = 5'b00101;// XOR rd = rs1 ^ rs2
                 end
@@ -129,15 +133,17 @@ always @(*) begin
                 end
 
                 3'b110: begin 
-                    if(instr[31:25] == 7'b00000001) alu_op = 5'b10000; // REM rd = rs1 % rs2
+                    if(instr[31:25] == 7'b0000001)
+                         alu_op = 5'b10000; // REM rd = rs1 % rs2
                     else 
                     alu_op = 5'b01000; // OR rd = rs1 | rs2
                 end
 
                 3'b111: begin 
-                    if(instr[31:25] == 7'b00000001) alu_op = 5'b10001; // REMU rd = rs1 % rs2
+                    if(instr[31:25] == 7'b0000001)
+                        alu_op = 5'b10001; // REMU rd = rs1 % rs2
                     else
-                    alu_op = 5'b01001;// AND rd = rs1 & rs2
+                        alu_op = 5'b01001;// AND rd = rs1 & rs2
                 end
             endcase
 
