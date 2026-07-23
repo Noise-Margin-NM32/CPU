@@ -12,6 +12,8 @@ module alu(
 
 
 
+reg [63:0] mul_out;
+
 always_comb begin
     if (alu_en) begin
         case(alu_op)
@@ -32,10 +34,22 @@ always_comb begin
         5'b00111: result = $signed(A) >>> B[4:0]; // SRA
         5'b01000: result = A|B; //OR
         5'b01001: result = A&B; //AND
-        5'b01010: result = A * B; // MUL (lower 32 bits)
-        5'b01011: result = ($signed(A) * $signed(B)) >>> 32; // MULH (upper 32 bits, signed×signed)
-        5'b01100: result = ($signed({{32{A[31]}}, A}) * $signed({1'b0, B})) >> 32; // MULHSU (upper 32, signed×unsigned)
-        5'b01101: result = ({32'b0, A} * {32'b0, B}) >> 32; // MULHU (upper 32, unsigned×unsigned)
+        5'b01010:begin
+            mul_out = A*B;
+            result = mul_out[31:0]; // MUL (lower 32 bits)
+        end
+        5'b01011:begin
+            mul_out = $signed(A) * $signed(B);
+            result = mul_out[63:32]; // MULH (upper 32 bits, signed×signed)
+        end
+        5'b01100:begin
+            mul_out = $signed({{32{A[31]}}, A}) * $signed({1'b0, B});
+            result = mul_out[63:32]; // MULHSU (upper 32, signed×unsigned)
+        end
+        5'b01101:begin
+            mul_out = A * B;
+            result = mul_out[63:32]; // MULHU (upper 32, unsigned×unsigned)
+        end
         5'b01110: begin // DIV (signed)
             if (B == 32'h0)
                 result = 32'hFFFFFFFF; // div-by-zero → -1

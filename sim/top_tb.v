@@ -108,20 +108,20 @@ module top_tb();
     uut.ROM.rom[16] = 32'h0080EB13; // ori x22, x1, 8      (5 | 8 = 13)
     uut.ROM.rom[17] = 32'h0040FB93; // andi x23, x1, 4     (5 & 4 = 4)
 
-    // IL-Type (Load) Instructions (Base x1=5, Offset=5, Addr=10, mem[10]=0x89ABCDEF)
-    uut.ROM.rom[18] = 32'h00508C03; // lb x24, 5(x1)
-    uut.ROM.rom[19] = 32'h00509C83; // lh x25, 5(x1)
-    uut.ROM.rom[20] = 32'h0050AD03; // lw x26, 5(x1)
-    uut.ROM.rom[21] = 32'h0050CD83; // lbu x27, 5(x1)
-    uut.ROM.rom[22] = 32'h0050DE03; // lhu x28, 5(x1)
+    // IL-Type (Load) Instructions (Base x1=5, Offset=35, Addr=40, reads mem[10]=0x89ABCDEF)
+    uut.ROM.rom[18] = 32'h02308C03; // lb x24, 35(x1)
+    uut.ROM.rom[19] = 32'h02309C83; // lh x25, 35(x1)
+    uut.ROM.rom[20] = 32'h0230AD03; // lw x26, 35(x1)
+    uut.ROM.rom[21] = 32'h0230CD83; // lbu x27, 35(x1)
+    uut.ROM.rom[22] = 32'h0230DE03; // lhu x28, 35(x1)
 
 
-    // sw x3, 12(x1) -> RAM[17] = x3 (7)
-    uut.ROM.rom[23] = 32'h0030A623;
-    // sh x3, 13(x1) -> RAM[18][15:0] = x3[15:0] (7)
-    uut.ROM.rom[24] = 32'h003096A3;
-    // sb x3, 14(x1) -> RAM[19][7:0] = x3[7:0] (7)
-    uut.ROM.rom[25] = 32'h00308723;
+    // sw x3, 63(x1) -> RAM[17] = x3 (7)
+    uut.ROM.rom[23] = 32'h0230AFA3;
+    // sh x3, 67(x1) -> RAM[18][15:0] = x3[15:0] (7)
+    uut.ROM.rom[24] = 32'h043091A3;
+    // sb x3, 71(x1) -> RAM[19][7:0] = x3[7:0] (7)
+    uut.ROM.rom[25] = 32'h043083A3;
 
     // Test 27: BEQ Not Taken (x1=5, x2=3 are not equal)
     uut.ROM.rom[26] = 32'h00208663; // beq x1, x2, 12 (Not Taken, PC goes to 27)
@@ -177,28 +177,28 @@ module top_tb();
 
     // Test 34: LUI (Load Upper Immediate)
     uut.ROM.rom[60] = 32'h12345EB7; // lui x29, 32'h12345
-    uut.ROM.rom[61] = 32'h01D02A23; // sw x29, 20(x0) (stores LUI result at RAM[20])
+    uut.ROM.rom[61] = 32'h05D02823; // sw x29, 80(x0) (stores LUI result at RAM[20])
 
     // Test 35: AUIPC (Add Upper Immediate to PC)
     // At ROM index 62 (PC = 248), auipc x29, 32'h22222 -> x29 = 32'h22222000 + 248 = 32'h222220F8
     uut.ROM.rom[62] = 32'h22222E97; 
-    uut.ROM.rom[63] = 32'h01D02C23; // sw x29, 24(x0) (stores AUIPC result at RAM[24])
+    uut.ROM.rom[63] = 32'h07D02023; // sw x29, 96(x0) (stores AUIPC result at RAM[24])
 
     // Test 36: JAL (Jump and Link)
     // At ROM index 64 (PC = 256 = 0x100), jal x29, 120 -> jumps to index 100+120 = 220 (PC = 272) and sets x29 = 260
     uut.ROM.rom[64] = 32'h12000EEF; 
-    uut.ROM.rom[65] = 32'h03D02223; // sw x29, 36(x0) (stores to RAM[36] - should be skipped!)
+    uut.ROM.rom[65] = 32'h09D02823; // sw x29, 144(x0) (stores to RAM[36] - should be skipped!)
     // uut.ROM.rom[66] = 32'h00000013; // nop
     // uut.ROM.rom[67] = 32'h00000013; // nop
-    uut.ROM.rom[136] = 32'h01D02E23; // sw x29, 28(x0) (stores JAL return address 104 at RAM[28])
+    uut.ROM.rom[136] = 32'h07D02823; // sw x29, 112(x0) (stores JAL return address 104 at RAM[28])
 
     // Test 37: JALR (Jump and Link Register)
     // Setup x29 = 284 (32'h0000011C)
     uut.ROM.rom[137] = 32'h11c00E93; // addi x29, x0, 284
     // At ROM index 70 (PC = 280), jalr x29, x29, 4 -> jumps to target 284 + 4 = 288 (index 72) and sets x29 = 284
     uut.ROM.rom[138] = 32'h004E8EE7; 
-    uut.ROM.rom[139] = 32'h03D02423; // sw x29, 40(x0) (stores to RAM[40] - should be skipped!)
-    uut.ROM.rom[140] = 32'h03D02023; // sw x29, 32(x0) (stores JALR return address 284 at RAM[32])
+    uut.ROM.rom[139] = 32'h0BD02023; // sw x29, 160(x0) (stores to RAM[40] - should be skipped!)
+    uut.ROM.rom[140] = 32'h09D02023; // sw x29, 128(x0) (stores JALR return address 284 at RAM[32])
 
     // // ===== M-Extension Tests =====
     // // Re-setup registers for M-extension tests

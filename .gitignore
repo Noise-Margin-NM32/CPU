@@ -1,0 +1,7 @@
+*.log
+*.jou
+./.Xil
+*.str
+*.pb
+.swp
+
