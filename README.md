@@ -1,91 +1,93 @@
-# 8-bit Pipelined CPU — RTL Design in Verilog
+# 32-bit Pipelined RISC-V (RV32IM) CPU — RTL Design in Verilog
 
-A fully functional **8-bit CPU** implemented in Verilog, featuring a **3-stage pipeline** (IF → ID → EX/WB), a custom **ISA with 10 instructions**, a **Harvard memory architecture**, and a **Python assembler** that converts assembly code to machine hex with automatic hazard NOP insertion.
+A fully functional **32-bit CPU** implemented in Verilog, featuring a **3-stage pipeline** (IF → ID → EX/WB), a subset of the standard **RISC-V RV32I Base Integer ISA** combined with the **RV32M Multiply/Divide Extension**, a **Harvard memory architecture**, and an extensive self-verifying testbench environment.
 
 ---
 
 ## Architecture Overview
 
 ```
-                ┌──────────────────────────────────────────────┐
-                │               top_piplined.v                 │
-                │                                              │
-  ┌──────────┐  │  ┌────────┐  IF/ID  ┌──────────┐  ID/EX     │
-  │  Clock   │──┼─▶│   PC   │────────▶│Control   │───────┐    │
-  │  Reset   │  │  │        │         │  Unit    │       │    │
-  └──────────┘  │  └────────┘         └──────────┘       ▼    │
-                │       │                    │       ┌────────┐│
-                │       ▼                   ▼        │  ALU   ││
-                │  ┌────────┐         ┌──────────┐   └────────┘│
-                │  │  ROM   │         │ Reg File │       │     │
-                │  │(Instr) │         │ (8×8-bit)│       ▼     │
-                │  └────────┘         └──────────┘  ┌────────┐│
-                │                          │         │  RAM   ││
-                │                          └────────▶│(256×8b)││
-                │                                    └────────┘│
-                └──────────────────────────────────────────────┘
+                    ┌──────────────────────────────────────────────┐
+                    │               top_piplined.v                 │
+                    │                                              │
+      ┌──────────┐  │  ┌────────┐  IF/ID  ┌──────────┐  ID/EX      │
+      │  Clock   │──┼─▶│   PC   │────────▶│Control   │───────┐     │
+      │  Reset   │  │  │(32-bit)│         │  Unit    │       │     │
+      └──────────┘  │  └────────┘         └──────────┘       ▼     │
+                    │       │                    │       ┌────────┐│
+                    │       ▼                   ▼        │  ALU   ││
+                    │  ┌────────┐         ┌──────────┐   │(32-bit)││
+                    │  │  ROM   │         │ Reg File │   └────────┘│
+                    │  │(Instr) │         │(32×32-bit)       │     │
+                    │  └────────┘         └──────────┘       ▼     │
+                    │                          │         ┌────────┐│
+                    │                          └────────▶│  RAM   ││
+                    │                                    │(256×32)││
+                    │                                    └────────┘│
+                    └──────────────────────────────────────────────┘
 ```
 
 ### Pipeline Stages
 
-| Stage | Name    | Modules involved                          |
-|-------|---------|-------------------------------------------|
-| 1     | **IF**  | `program_counter`, `instruction_mem`      |
-| 2     | **ID**  | `control_unit`, `register_file`           |
-| 3     | **EX/WB** | `alu`, `data_mem`, register write-back  |
+| Stage | Name | Modules Involved | Description |
+|---|---|---|---|
+| 1 | **IF** (Fetch) | `program_counter`, `instruction_mem` | Increments PC or loads jump address; fetches 32-bit instructions from Instruction ROM. |
+| 2 | **ID** (Decode) | `control_unit`, `register_file` | Decodes instruction fields, sign-extends immediates, and reads source registers asynchronously. |
+| 3 | **EX/WB** (Execute/Write-back) | `alu`, `data_mem`, write-back | Computes arithmetic/logical operations, performs load/store operations, handles branch/jump targets, and writes back to registers synchronously on clock edges. |
 
-Pipeline registers: `IF/ID` and `ID/EX`.
+Pipeline registers between stages: `IF/ID` and `ID/EX`.
 
 ---
 
 ## Repository Layout
 
 ```
-8bit_cpu/
-├── rtl/                  # Synthesisable Verilog source
+8bit_CPU_pipline/
+├── rtl/                  # Synthesisable Verilog/SystemVerilog Source
 │   ├── top_piplined.v    # Top-level: wires together all pipeline stages
-│   ├── control_unit.v    # Instruction decoder — generates all control signals
-│   ├── alu.v             # 8-bit ALU (ADD, SUB, MUL, AND, OR, XOR, NOT, shifts)
-│   ├── pc.v              # Program counter with load (jump) support
-│   ├── register_file.v   # 8 × 8-bit register file (async read, sync write)
-│   ├── data_mem.v        # 256 × 8-bit data RAM (async read, sync write)
-│   └── instruction_mem.v # 256 × 16-bit instruction ROM ($readmemh)
+│   ├── control_unit.v    # Instruction decoder — generates control signals
+│   ├── alu.sv            # 32-bit ALU (ADD, SUB, shifts, logicals, MUL/DIV extension)
+│   ├── program_counter.v # 32-bit Program Counter (with load/branch support)
+│   ├── register_file.v   # 32 × 32-bit register file (async read, sync write, x0=0)
+│   ├── data_mem.v        # 256 × 32-bit data RAM (async read, sync write, byte enables)
+│   └── instruction_mem.v # 256 × 32-bit instruction ROM (loads hex code via $readmemh)
 │
-├── sim/                  # Simulation
-│   ├── top_tb.v          # Testbench
-│   └── run_sim.sh        # One-shot: assemble → compile → simulate
+├── sim/                  # Simulation Environment
+│   ├── top_tb.v          # Extensive 45-instruction self-verifying testbench
+│   ├── cpu_sim           # Compiled simulation binary
+│   ├── cpu_sim.vcd       # Simulation waveform trace file (for GTKWave)
+│   └── run_sim.sh        # One-shot simulation runner script
 │
-├── tools/
-│   └── assembler.py      # Python assembler (.asm → program.txt hex)
+├── programs/             # Program Sources
+│   ├── demo.asm          # Legacy ALU assembly demo
+│   └── counter_loop.asm  # Legacy countdown loop assembly demo
 │
-├── programs/             # Example assembly programs
-│   ├── demo.asm          # ALU demo: ADD, MUL, READ/WRITE
-│   └── counter_loop.asm  # Countdown loop using JNZ
+├── tools/                # Legacy Tools
+│   └── assembler.py      # Legacy Python assembler (for custom 8-bit ISA)
 │
-├── docs/
-│   └── ISA_reference.md  # Full instruction set reference
+├── docs/                 # Documentation
+│   └── ISA_reference.md  # Full RISC-V RV32IM instruction set reference
 │
 └── .gitignore
 ```
 
 ---
 
-## Instruction Set (Quick Reference)
+## Instruction Set Summary
 
-| Opcode | Mnemonic | Operation |
-|:------:|----------|-----------|
-| `0`    | LOADI Rd, imm  | `Rd ← imm` |
-| `1`    | ADD Rd, Rs     | `Rd ← Rd + Rs` |
-| `2`    | SUB Rd, Rs     | `Rd ← Rd − Rs` |
-| `3`    | MOV Rd, Rs     | `Rd ← Rs` |
-| `4`    | READ Rd, addr  | `Rd ← RAM[addr]` |
-| `5`    | WRITE Rs, addr | `RAM[addr] ← Rs` |
-| `6`    | JUMP addr      | `PC ← addr` |
-| `7`    | JNZ addr       | `if (Z==0): PC ← addr` |
-| `8`    | MUL Rd, Rs     | `Rd ← Rd × Rs` |
-| `E`    | HALT           | Stop |
+The processor supports **45 instructions** spanning the RV32I base integer ISA and the RV32M extension:
 
-See [`docs/ISA_reference.md`](docs/ISA_reference.md) for the full encoding, flag behaviour, and pipeline hazard rules.
+1. **Arithmetic**: `ADD`, `SUB`, `ADDI`
+2. **Logical**: `AND`, `OR`, `XOR`, `ANDI`, `ORI`, `XORI`
+3. **Shifts**: `SLL`, `SRL`, `SRA`, `SLLI`, `SRLI`, `SRAI`
+4. **Comparisons**: `SLT`, `SLTU`, `SLTI`, `SLTIU`
+5. **Memory Access**: Loads (`LB`, `LH`, `LW`, `LBU`, `LHU`) and Stores (`SB`, `SH`, `SW`)
+6. **Branching**: `BEQ`, `BNE`, `BLT`, `BGE`, `BLTU`, `BGEU`
+7. **Jumps & JAL/JALR**: `JAL`, `JALR`
+8. **Upper Immediates**: `LUI`, `AUIPC`
+9. **Multiply/Divide (M-Extension)**: `MUL`, `MULH`, `MULHSU`, `MULHU`, `DIV`, `DIVU`, `REM`, `REMU`
+
+For instruction formats, opcodes, and field encodings, see [`docs/ISA_reference.md`](docs/ISA_reference.md).
 
 ---
 
@@ -93,95 +95,48 @@ See [`docs/ISA_reference.md`](docs/ISA_reference.md) for the full encoding, flag
 
 ### Prerequisites
 
-| Tool | Purpose | Install |
-|------|---------|---------|
-| [Icarus Verilog](https://steveicarus.github.io/iverilog/) | Verilog simulation | `sudo apt install iverilog` |
-| Python 3.x | Assembler | `sudo apt install python3` |
-| [GTKWave](http://gtkwave.sourceforge.net/) *(optional)* | Waveform viewer | `sudo apt install gtkwave` |
+| Tool | Purpose | Installation |
+|---|---|---|
+| **Icarus Verilog** | Verilog compiler/simulator | `sudo apt install iverilog` |
+| **GTKWave** *(optional)* | Waveform visualizer | `sudo apt install gtkwave` |
 
-### Quick-start
+### Simulating the CPU
+
+To run the automated Verilog compilation and verify the CPU design against the 45-instruction test suite:
 
 ```bash
-# 1. Clone
-git clone https://github.com/YOUR_USERNAME/8bit-cpu.git
-cd 8bit-cpu
-
-# 2. Run the full flow (assemble + compile + simulate)
+# 1. Navigate to the simulation directory
 cd sim
-chmod +x run_sim.sh
-./run_sim.sh ../programs/demo.asm
 
-# 3. View waveforms (optional)
+# 2. Run the simulation script
+./run_sim.sh
+```
+
+This compiles all Verilog files in `rtl/` alongside `sim/top_tb.v`, runs the simulation using `vvp`, outputs a verification report of the passed and failed tests, and generates `cpu_sim.vcd`.
+
+### Waveform Analysis
+
+To visually inspect the pipeline registers, control signals, registers, and execution timeline:
+
+```bash
 gtkwave cpu_sim.vcd &
 ```
 
-### Running a custom program
-
-```bash
-# Write your program
-nano programs/my_program.asm
-
-# Assemble it manually
-python3 tools/assembler.py programs/my_program.asm rtl/program.txt
-
-# Then compile & simulate from the sim/ folder
-cd sim && ./run_sim.sh
-```
-
 ---
 
-## Assembler
+## Design and Hazard Notes
 
-The assembler lives in `tools/assembler.py` and handles:
-
-- **Instruction encoding** — converts mnemonics to 16-bit hex words
-- **Automatic NOP insertion** — detects RAW (read-after-write) data hazards and inserts the correct number of pipeline bubbles
-- **Branch delay slots** — inserts 2 NOPs after every `JNZ` / `JUMP`
-
-```bash
-python3 tools/assembler.py <input.asm> [output.txt]
-```
-
----
-
-## Example Programs
-
-### `programs/demo.asm` — ALU & Memory Test
-
-```asm
-LOADI R1, 10    // R1 = 10
-LOADI R2, 5     // R2 = 5
-ADD   R1, R2    // R1 = 15
-WRITE R1, 100   // RAM[100] = 15
-LOADI R1, 0     // Reset R1
-READ  R1, 100   // R1 = RAM[100]  → should be 15
-MUL   R1, R2    // R1 = 15 × 5  → lower 8 bits = 75
-HALT
-```
-
-### `programs/counter_loop.asm` — Countdown with JNZ
-
-```asm
-LOADI R1, 3     // Counter = 3
-LOADI R2, 0     // Sum = 0
-ADD   R2, R1    // Sum += Counter   ← loop top
-LOADI R3, 1
-SUB   R1, R3    // Counter -= 1
-JNZ   4         // Jump back if Counter != 0
-HALT            // R2 = 3+2+1 = 6
-```
-
----
-
-## Design Notes
-
-- **Harvard architecture** — instruction ROM and data RAM are separate address spaces (both 256 entries).
-- **Hazard handling** — done entirely in software (the assembler); no forwarding paths in hardware.
-- **Jump condition** — `JNZ` reads the `zero_flag` produced by the ALU in the EX stage. The assembler ensures the flag-setting instruction has completed before the `JNZ` is decoded, via branch delay NOPs.
-- **Reset** — active-low asynchronous reset (`rst = 0`). All registers and the PC clear to zero.
+* **Harvard Architecture**: Instruction memory (ROM) and data memory (RAM) exist in separate address spaces. Instruction ROM reads instructions as 32-bit words, while Data RAM supports byte, half-word, and word reads and writes.
+* **Data Hazards (RAW)**:
+  * Since the register file write happens synchronously on the rising clock edge at the end of the EX/WB stage and register reads happen asynchronously during the ID stage, a 1-cycle data hazard exists.
+  * **Resolution**: Software/toolchains must insert **1 NOP** instruction between any instruction writing to a register and a subsequent instruction reading from that same register.
+* **Control Hazards**:
+  * Jumps and taken branches take two clock cycles to resolve target addresses and PC updates in the EX/WB stage.
+  * **Resolution**: The hardware automatically flushes the pipeline registers (clearing the `if_id_instr` register to NOPs) when `branch_taken` or `jump` is asserted. There is a **2-cycle branch penalty**, but no compiler-inserted NOPs are required after branches/jumps.
+* **Reset**: All internal pipeline registers, PC, and general-purpose registers (except `x0`) are cleared asynchronously when `rst = 0`.
 
 ---
 
 ## License
 
-MIT — free to use for learning, coursework, and personal projects.
+This project is licensed under the MIT License. Feel free to use it for learning, coursework, and hardware design prototyping.

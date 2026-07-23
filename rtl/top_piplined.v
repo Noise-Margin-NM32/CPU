@@ -52,8 +52,8 @@ instruction_mem ROM(
 // if_id 
 always @(posedge clk) begin
     if(!rst || jump || branch_taken) begin
-        if_id_instr <= 32'h00000000;
-        if_id_pc    <= 32'h00000000;
+        if_id_instr <= 32'h00000013; // NOP instruction
+        if_id_pc    <= 32'h00000013; // NOP instruction
     end
     else begin 
         if_id_instr <= instruction;
@@ -229,13 +229,19 @@ assign alu_B = (id_ex_instr_type == 4'b0000) ? read_data2 :
                (id_ex_instr_type == 4'b1011) ? {{12{id_ex_imm[19]}}, id_ex_imm} : 32'h00000000; // Sign-extend immediate for J-type
 
 
+assign addr = (id_ex_instr_type == 4'b0001) ? alu_result : 
+              (id_ex_instr_type == 4'b0011) ? alu_result : 32'h00000000;
+
+wire [31:0] shifted_data_out;
+assign shifted_data_out = data_out >> (8 * addr[1:0]);
+
 assign write_back_data = (id_ex_instr_type == 4'b0000) ? alu_result : 
-                        (id_ex_instr_type == 4'b0001) ?  (id_ex_load_size == 3'b000) ? {{24{data_out[7]}}, data_out[7:0]} : 
-                                                        (id_ex_load_size == 3'b001) ? {{16{data_out[15]}}, data_out[15:0]} :
-                                                        (id_ex_load_size == 3'b010) ? data_out :
-                                                        (id_ex_load_size == 3'b011) ? {24'b0, data_out[7:0]} : 
-                                                        (id_ex_load_size == 3'b100) ? {16'b0, data_out[15:0]} : 
-                                                        data_out :
+                        (id_ex_instr_type == 4'b0001) ?  (id_ex_load_size == 3'b000) ? {{24{shifted_data_out[7]}}, shifted_data_out[7:0]} : 
+                                                        (id_ex_load_size == 3'b001) ? {{16{shifted_data_out[15]}}, shifted_data_out[15:0]} :
+                                                        (id_ex_load_size == 3'b010) ? shifted_data_out :
+                                                        (id_ex_load_size == 3'b011) ? {24'b0, shifted_data_out[7:0]} : 
+                                                        (id_ex_load_size == 3'b100) ? {16'b0, shifted_data_out[15:0]} : 
+                                                        shifted_data_out :
                         (id_ex_instr_type == 4'b0010) ? alu_result : 
                         (id_ex_instr_type == 4'b0011) ? data_out : 
                         (id_ex_instr_type == 4'b0100) ? 32'h00000000 : 
@@ -245,17 +251,18 @@ assign write_back_data = (id_ex_instr_type == 4'b0000) ? alu_result :
                         (id_ex_instr_type == 4'b1000) ? alu_result :
                         (id_ex_instr_type == 4'b1001) ? alu_result : 32'h00000000;
 
-assign addr = (id_ex_instr_type == 4'b0001) ? alu_result : 
-              (id_ex_instr_type == 4'b0011) ? alu_result : 32'h00000000;
-
 wire [3:0] byte_en;
 assign byte_en = (id_ex_instr_type == 4'b0011) ? (
-                     (id_ex_load_size == 3'b000) ? 4'b0001 : // SB
-                     (id_ex_load_size == 3'b001) ? 4'b0011 : // SH
-                     (id_ex_load_size == 3'b010) ? 4'b1111 : 4'b0000 // SW
+                     (id_ex_load_size == 3'b000) ? (4'b0001 << addr[1:0]) : // SB
+                     (id_ex_load_size == 3'b001) ? (4'b0011 << addr[1:0]) : // SH
+                     (id_ex_load_size == 3'b010) ? (4'b1111 << addr[1:0]) : 4'b0000 // SW
                  ) : 4'b0000;
 
-assign write_data = read_data2; 
+assign write_data = (id_ex_instr_type == 4'b0011) ? (
+                        (id_ex_load_size == 3'b000) ? {4{read_data2[7:0]}} :   // SB
+                        (id_ex_load_size == 3'b001) ? {2{read_data2[15:0]}} :  // SH
+                        read_data2                                             // SW
+                    ) : read_data2; 
 
 wire comparison_out;
 assign comparison_out = (id_ex_alu_op == 4'b0001) ? zero_flag : alu_result[0];
