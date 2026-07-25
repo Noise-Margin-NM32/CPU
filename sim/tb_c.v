@@ -1,15 +1,15 @@
 `timescale 1ns/1ps
 module tb_c();
-    reg clk, rst;
-    top_piplined uut (.clk(clk), .rst(rst));
+    reg clk, rstn;
+    top_piplined uut (.clk(clk), .rstn(rstn));
 
     always #5 clk = ~clk;
 
     initial begin
-        clk = 0; rst = 0;
+        clk = 0; rstn = 0;
         #20;
-        rst = 1; // Release reset
-        
+        rstn = 1; // Release reset
+
         // Wait until completion marker is written to RAM[254]
         // or a timeout occurs
         fork

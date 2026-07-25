@@ -1,6 +1,6 @@
 module top_piplined(
     input clk,
-    input rst
+    input rstn
 );
 
 
@@ -36,7 +36,7 @@ reg [31:0] if_id_pc; // pc value to be passed to the next stage (ID) for branch 
 
 program_counter pc_inst(
     // input 
-    .clk(clk), .rst(rst), .en(en), .jump(jump), .d_in(d_in), 
+    .clk(clk), .rstn(rstn), .en(en), .jump(jump), .d_in(d_in), 
     // output 
     .pc(pc)
 );
@@ -51,7 +51,7 @@ instruction_mem ROM(
 
 // if_id 
 always @(posedge clk) begin
-    if(!rst || jump || branch_taken) begin
+    if(!rstn || jump || branch_taken) begin
         if_id_instr <= 32'h00000013; // NOP instruction
         if_id_pc    <= 32'h00000013; // NOP instruction
     end
@@ -123,7 +123,7 @@ control_unit cu(
 // pipline ID to Execute
 always @(posedge clk) begin
 
-    if(!rst) begin
+    if(!rstn) begin
         // id_ex_en_write_reg <=0; 
         id_ex_alu_op <= 4'b0000;
         id_ex_reg_sel_a <=0;
@@ -291,7 +291,7 @@ data_mem mem(
 
 register_file reg_file(
     .clk(clk),
-    .rst(rst),
+    .rstn(rstn),
 
     // input coming from execute stage
     .en_write(id_ex_en_write),

@@ -1,6 +1,6 @@
 module register_file( // planned to have 8 register in one register file
     input clk,
-    input rst,
+    input rstn,
     input en_write, // enable to right to register ( 3 bit value to code for a reg)
     input [4:0] write_reg, // which address to be written to
     input [31:0] write_data, 
@@ -27,9 +27,9 @@ assign read_data2 = (read_reg2 == 5'b00000) ? 32'h00000000 : registers[read_reg2
 // now take care of rst and read 
 
 integer i;
-always @(posedge clk or negedge rst) begin
+always @(posedge clk or negedge rstn) begin
 
-    if(!rst) begin
+    if(!rstn) begin
         for(i =1; i<32; i = i+1)begin
             registers[i] <= 32'h00000000; // clearing all the registers
         end 

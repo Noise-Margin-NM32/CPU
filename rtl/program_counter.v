@@ -2,7 +2,7 @@
 
 module program_counter(
     input clk,
-    input rst, // reset
+    input rstn, // reset
     input en, // enable the pc
     input jump, // jump enable 
     input [31:0]d_in, // address to jump at
@@ -14,8 +14,8 @@ module program_counter(
 
 //    assign pc_en = en;
     
-    always @(posedge clk or negedge rst) begin
-        if(!rst) begin
+    always @(posedge clk or negedge rstn) begin
+        if(!rstn) begin
             pc <= 32'h00000000;
         end    
     

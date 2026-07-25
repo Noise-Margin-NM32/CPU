@@ -1,5 +1,5 @@
 $date
-	Thu Jul 23 20:26:59 2026
+	Sat Jul 25 12:34:20 2026
 $end
 $version
 	Icarus Verilog
@@ -9,13 +9,13 @@ $timescale
 $end
 $scope module tb_c $end
 $var reg 1 ! clk $end
-$var reg 1 " rst $end
+$var reg 1 " rstn $end
 $scope module uut $end
 $var wire 1 # branch_taken $end
 $var wire 1 ! clk $end
 $var wire 1 $ en $end
 $var wire 1 % jump $end
-$var wire 1 " rst $end
+$var wire 1 " rstn $end
 $var wire 1 & zero_flag $end
 $var wire 5 ' write_reg [4:0] $end
 $var wire 1 ( write_en $end
@@ -96,7 +96,7 @@ $var wire 1 ! clk $end
 $var wire 32 a d_in [31:0] $end
 $var wire 1 $ en $end
 $var wire 1 % jump $end
-$var wire 1 " rst $end
+$var wire 1 " rstn $end
 $var reg 32 b pc [31:0] $end
 $upscope $end
 $scope module reg_file $end
@@ -104,7 +104,7 @@ $var wire 1 ! clk $end
 $var wire 1 C en_write $end
 $var wire 5 c read_reg1 [4:0] $end
 $var wire 5 d read_reg2 [4:0] $end
-$var wire 1 " rst $end
+$var wire 1 " rstn $end
 $var wire 32 e write_data [31:0] $end
 $var wire 5 f write_reg [4:0] $end
 $var wire 32 g read_data2 [31:0] $end
