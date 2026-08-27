@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 module top_tb();
-    reg clk, rst;
+    reg clk, rstn;
             reg test_status [1:45];
     string test_names [1:45];
     
@@ -60,14 +60,14 @@ module top_tb();
     integer passed_tests = 0;
     integer failed_tests = 0;
 
-    top_piplined uut (.clk(clk), .rst(rst));
+    top_piplined uut (.clk(clk), .rstn(rstn));
 
     always #5 clk = ~clk;
 	
     initial begin
-        clk = 0; rst = 0;
+        clk = 0; rstn = 0;
         repeat(1) @(negedge clk);
-         rst = 1; // Release reset
+         rstn = 1; // Release reset
          #1;
          
 //    uut.pc_inst.pc_en = 1'b0;
@@ -78,7 +78,7 @@ module top_tb();
     uut.reg_file.registers[4] = 32'hFFFFFFFE; // x4 = -2
     uut.reg_file.registers[5] = 32'hFFFFFFFB; // x5 = -5
 
-        // S-Type (Store) Instructions (Base x1=5)
+        /
     uut.mem.ram[17] = 32'hA5A5A5A5; // Initial value at addr 17
     uut.mem.ram[18] = 32'h5A5A5A5A; // Initial value at addr 18
     uut.mem.ram[19] = 32'h12345678; // Initial value at addr 19
@@ -185,7 +185,7 @@ module top_tb();
     uut.ROM.rom[63] = 32'h07D02023; // sw x29, 96(x0) (stores AUIPC result at RAM[24])
 
     // Test 36: JAL (Jump and Link)
-    // At ROM index 64 (PC = 256 = 0x100), jal x29, 120 -> jumps to index 100+120 = 220 (PC = 272) and sets x29 = 260
+    // At ROM index 64 (PC = 256 = 0x100), jal x29, 120 -> jumps to index 256+120 = 376(0x178) and sets x29 = 380
     uut.ROM.rom[64] = 32'h12000EEF; 
     uut.ROM.rom[65] = 32'h09D02823; // sw x29, 144(x0) (stores to RAM[36] - should be skipped!)
     // uut.ROM.rom[66] = 32'h00000013; // nop
@@ -848,6 +848,7 @@ module top_tb();
     initial begin
         $dumpfile("cpu_sim.vcd");
         $dumpvars(0, top_tb);
-        $monitor("Time=%0t PC=%h if_id_instr=%h if_id_pc=%h id_ex_instr_type=%h id_ex_pc=%h alu_A=%h alu_B=%h alu_res=%h jump=%b branch_taken=%b x17=%h x18=%h x20=%h x21=%h", $time, uut.pc, uut.if_id_instr, uut.if_id_pc, uut.id_ex_instr_type, uut.id_ex_pc, uut.alu_unit.A, uut.alu_unit.B, uut.alu_unit.result, uut.jump, uut.branch_taken, uut.reg_file.registers[17], uut.reg_file.registers[18], uut.reg_file.registers[20], uut.reg_file.registers[21]);
+        $monitor("Time=%0t PC=%0d ROM_addr=%0d instr=%h halt=%b branch_taken=%b jump=%b", 
+                 $time, uut.pc, uut.pc[9:2], uut.instruction_r, uut.halt, uut.branch_taken, uut.jump);
     end
 endmodule

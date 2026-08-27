@@ -6,7 +6,7 @@ module program_counter(
     input en, // enable the pc
     input jump, // jump enable 
     input [31:0]d_in, // address to jump at
-    
+    input halt,//halt the pc
     output reg [31:0] pc // output address to reach at 
 );
 
@@ -23,7 +23,7 @@ module program_counter(
             pc <= d_in; // jump
         end
     
-        else if (en) begin
+        else if (en && !halt) begin
             
             // if(pc == 255) begin  // limiting pc till 255
             //     pc <=0; 

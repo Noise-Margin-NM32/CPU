@@ -6,16 +6,13 @@ module data_mem(
     input [3:0] byte_en,
     input [31:0] write_data,
 
-    output [31:0] data_out
+    output reg [31:0] data_out
 );
 
     reg [31:0] ram[255:0]; //  256 location in ram, each of size 32 bit 
 
 
-// reading is again asynchronous 
-assign data_out  = ram[addr[9:2]];
-
-// wrtingin is synchornous 
+// writing is synchornous 
 
 always @(posedge clk) begin 
     if(write_en) begin
@@ -24,6 +21,8 @@ always @(posedge clk) begin
        if (byte_en[2]) ram[addr[9:2]][23:16] <= write_data[23:16];
        if (byte_en[3]) ram[addr[9:2]][31:24] <= write_data[31:24];
     end
+
+    data_out <= (addr[9:2] < 256) ? ram[addr[9:2]] : 32'h00000000; // reading the data from the memory
 
 end 
 
