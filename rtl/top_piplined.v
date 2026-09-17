@@ -1,352 +1,284 @@
-module top_piplined(
-    input clk,
-    input rstn
+`timescale 1ns/1ps
+`default_nettype wire
+
+module top_piplined (
+    input wire clk,
+    input wire rstn
 );
 
+    // =========================================================================
+    // Stage 1: IF (Instruction Fetch)
+    // =========================================================================
+    wire [31:0] pc;
+    wire [31:0] branch_target;
+    wire        branch_taken;
+    wire        jump;
 
-// Stage 1: Fetch(IF) signals: PC + ROM 
+    wire        pc_enable;
+    wire        if_id_enable;
+    wire        ex_mem_enable;
+    wire        insert_bubble;
+    wire        freeze_all;
 
+    program_counter pc_inst (
+        .clk(clk),
+        .rstn(rstn),
+        .en(pc_enable),
+        .jump(branch_taken || jump),
+        .d_in(branch_target),
+        .halt(!pc_enable),
+        .pc(pc)
+    );
 
-// Stage 2: Decode (ID) Signals: Control UNit 
+    wire        imem_valid = rstn;
+    wire        imem_ready;
+    wire [31:0] instruction_r;
 
+    instruction_mem #(
+        .HEX_FILE("/home/omkar/8bit_CPU_pipline/firmware/program.hex")
+    ) ROM (
+        .clk(clk),
+        .rstn(rstn),
+        .addr(pc),
+        .valid(imem_valid),
+        .ready(imem_ready),
+        .ins_out(instruction_r)
+    );
 
+    // IF/ID Pipeline Register
+    reg [31:0] if_id_pc;
+    reg [31:0] if_id_instr;
 
-// Stage 3: EXECUTE 
-
-
-
-
-// ******STAGE 1
-
-wire en, jump; // en- pc enable  
-wire [31:0] d_in; // addr to jump 
-wire [31:0] pc;
-wire branch_taken; // branch decision wire
-reg halt;
-reg i_valid;
-reg i_ready;
-
-
-assign en = 1'b1; // always enable the pc to increment
-// assign jump = 1'b0; // no jump in this design, for now
-wire [31:0] instruction_r; // instruction read from ROM
-// reg [31:0] instruction; //instruction retruned from ROM to cu
-
-
-// Pipline Register; IF/ID Register 
-// reg [31:0] if_id_instr;
-reg [31:0] if_id_pc; // pc value to be passed to the next stage (ID) for branch and jump instructions
-
-program_counter pc_inst(
-    // input 
-    .clk(clk), .rstn(rstn), .en(en), .jump(jump), .d_in(d_in), .halt(halt),
-    // output 
-    .pc(pc)
-);
-
-
-instruction_mem ROM(
-    .clk(clk),
-    .addr(pc),
-    // .halt(halt),
-    .rstn(rstn),
-    .ready(i_ready),
-    // output
-    .valid(i_valid),
-    .ins_out(instruction_r)
-);
-
-assign i_ready = ~halt; // ready signal is high when halt is low, indicating that the instruction memory is ready to provide the next instruction
-
-
-// if_id 
-always @(posedge clk or negedge rstn) begin
-    if(!rstn || jump) begin
-        // if_id_instr <= 32'h00000013; // NOP instruction
-        // instruction <= 32'h00000013; // NOP instruction/
-        if_id_pc    <= if_id_pc; // NOP instruction
-    end
-    else begin 
-        // if_id_instr <= instruction;
-        // instruction <= instruction_r;
-        if_id_pc <= pc;
-    end
-end 
-
-
-// STAGE 2: Decode + Execute
-
-// Decode goal: figure out what to do and get the data
-
-// assign instruction = instruction_r; // assign the instruction read from ROM to the instruction wire for decoding
-
-// CU
-wire [4:0] reg_sel_a, reg_sel_b; // register numebr retutned from the control unit after decoding the instruction 
-wire en_write;// coming from cu to register file 
-wire [4:0] write_reg; // choosen write reg by cu to register file 
-wire [4:0] alu_op; //
-wire [19:0] imm; // immediate value
-wire cu_alu_en; // alu enable returned by cu
-// wire [31:0] addr; // address to be read from mem by the cu 
-// wire write_en; // write enable returned by the cu to the mem module 
-// wire load_instr;
-wire [3:0] instr_type; // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J
-wire [2:0] load_size; // to identify the size of the data to be loaded (byte, half-word, word) 00-byte, 01-half-word, 10
-
-//ALU
-wire [31:0] alu_result;
-wire zero_flag, carry;
-wire [31:0] alu_A, alu_B;
-
-wire [31:0] read_data1,read_data2; //coming by reading the register-- can either go back to register or alu or memory
-
-//other wirs
-wire comparison_out;
-assign comparison_out = (alu_op == 5'b00001) ? zero_flag : alu_result[0];
-
-assign branch_taken = ((x_m_instr_type == 4'b0100) && ((x_m_load_size == 3'b000) ? comparison_out : !comparison_out)) ||
-                      (x_m_instr_type == 4'b1000) || (x_m_instr_type == 4'b1001); // Branch taken for B-type, JAL, and JALR instructions
-
-
-// -- PIpline Register: ID/EXECUTE
-
-reg [4:0] x_m_write_reg; // choosen write reg by cu to register file 
-reg [4:0] x_m_alu_op; //alu_opcode
-reg [4:0] x_m_reg_sel_a,x_m_reg_sel_b; // register selectors returned by the control unit  
-reg x_m_en_write; // write enable returned by the cu to the mem module 
-// reg [31:0] x_m_data_out;
-reg x_m_write_en; // write enable to write in mem after decoded in cpu 
-
-reg [19:0] x_m_imm;//???
-
-reg [3:0] x_m_instr_type; // to identify the type of instruction (R, I, S, B, U, J) 000-R, 001-IL, 010-IA, 011-S, 100-B, 101-U, 110-J
-reg [2:0] x_m_load_size; // to identify the size of the data
-reg x_m_alu_en;
-reg x_m_zero_flag;
-reg [31:0] x_m_pc; // pc value to be passed to the next stage (ID) for branch and jump instructions
-
-reg [31:0] x_m_alu_result; // result from the ALU to be passed to the next stage (MEM) for memory access instructions
-
-assign alu_A = (instr_type == 4'b0000) ? read_data1 :
-               (instr_type == 4'b0001) ? read_data1 :
-               (instr_type == 4'b0010) ? read_data1 :
-               (instr_type == 4'b0011) ? read_data1 :
-               (instr_type == 4'b0100) ? read_data1 :
-               (instr_type == 4'b0101) ? if_id_pc : 
-               (instr_type == 4'b0110) ? if_id_pc :
-               (instr_type == 4'b1000) ? if_id_pc :
-               (instr_type == 4'b1001) ? if_id_pc :
-               (instr_type == 4'b1010) ? if_id_pc :
-               (instr_type == 4'b1011) ? read_data1 : 32'h00000000;
-
-assign alu_B = (instr_type == 4'b0000) ? read_data2 :
-               (instr_type == 4'b0001) ? {{12{imm[19]}}, imm} : // Sign-extend immediate for IL-type
-               (instr_type == 4'b0010) ? {{12{imm[19]}}, imm} : // Sign-extend immediate for IA-type
-               (instr_type == 4'b0011) ? {{12{imm[19]}}, imm} : // Sign-extend immediate for S-type
-               (instr_type == 4'b0100) ? read_data2 : // Sign-extend immediate for B-type
-               (instr_type == 4'b0101) ? {{12{imm[19]}}, imm} : 
-               (instr_type == 4'b0110) ? {imm, 12'h000} :
-               (instr_type == 4'b1000) ? 32'h00000004 :
-               (instr_type == 4'b1001) ? 32'h00000004 :
-               (instr_type == 4'b1010) ? {{11{imm[19]}}, imm, 1'b0} :
-               (instr_type == 4'b1011) ? {{12{imm[19]}}, imm} : 32'h00000000; // Sign-extend immediate for J-type
-
-assign jump = (x_m_instr_type == 4'b0101) || (x_m_instr_type == 4'b1010) || (x_m_instr_type == 4'b1011);
-
-assign d_in = (x_m_instr_type == 4'b1011) ? {alu_result[31:1], 1'b0} : alu_result;
-
-control_unit cu(
-    // input 
-    .instr(instruction_r),  
-    // output 
-    .instr_type(instr_type),
-
-    //to ALU
-    .alu_en(cu_alu_en),
-    .alu_op(alu_op),
-    .imm(imm),
-
-    // to Register File
-    .reg_sel_a(reg_sel_a),
-    .reg_sel_b(reg_sel_b),
-    .en_write(en_write),
-    .write_reg(write_reg),
-
-    // to Data Memory
-    .write_en(write_en),
-    .load_size(load_size)
-
-    // .addr(addr),
-    // .en(en),.load(load),
-    // .load_instr(load_instr),
-);
-
-alu alu_unit(
-    .alu_en(cu_alu_en),
-    .A(alu_A),
-    .B(alu_B),
-    .alu_op(alu_op),
-    .result(alu_result),
-    .zero_flag(zero_flag),
-    .carry(carry)
-);
-
-// pipline ID to Execute
-always @(posedge clk or negedge rstn) begin
-
-    if(!rstn) begin
-        // x_m_alu_op <= 4'b0000;
-        // x_m_reg_sel_a <=0;
-        // x_m_reg_sel_b <=0;
-        // x_m_imm <= 20'b00000000000000000000;
-        // x_m_pc <= 32'h00000000;
-        x_m_en_write <= 0;
-        x_m_write_en <= 0;
-        x_m_write_reg <= 5'b00000;
-        x_m_instr_type <= 4'b0000;
-        x_m_load_size <= 3'b000;
-        // x_m_alu_en <= 1'b0;
-        // x_m_zero_flag <= 1'b0;
-
-    end 
-
-    else begin 
-        if(halt) begin
-            // x_m_alu_op <= 4'b0000;
-            // x_m_reg_sel_a <=x_m_reg_sel_a;
-            // x_m_reg_sel_b <=x_m_reg_sel_b;
-            // x_m_imm <= x_m_imm;
-            // x_m_alu_en <= 1'b1;
-            x_m_en_write <= x_m_en_write;
-            x_m_write_en <= x_m_write_en;
-            x_m_write_reg <= x_m_write_reg;
-            x_m_instr_type <= (x_m_instr_type == 4'b0100) ? 4'b0101 :
-                                (x_m_instr_type == 4'b1000) ? 4'b1010 :
-                                (x_m_instr_type == 4'b1001) ? 4'b1011 : x_m_instr_type;
-            x_m_load_size <= x_m_load_size;
-            // x_m_zero_flag <= 1'b0;
-            x_m_pc <= x_m_pc;
-            
-
+    always @(posedge clk or negedge rstn) begin
+        if (!rstn) begin
+            if_id_pc    <= 32'h00000000;
+            if_id_instr <= 32'h00000013; // NOP (ADDI x0, x0, 0)
+        end else if (branch_taken || jump) begin
+            if_id_instr <= 32'h00000013; // Flush wrong-path instruction to NOP
+            if_id_pc    <= branch_target;
+        end else if (if_id_enable) begin
+            if_id_pc    <= pc;
+            if_id_instr <= instruction_r;
         end
-        else begin
-            // x_m_alu_op <= alu_op;
-            // x_m_reg_sel_a <= reg_sel_a;
-            // x_m_reg_sel_b <= reg_sel_b;
-            // x_m_imm <= imm;
-            // x_m_pc <= if_id_pc;
-            // x_m_alu_en <= cu_alu_en;
-            x_m_en_write <= en_write;
-            x_m_write_en <= write_en;
-            x_m_write_reg <= write_reg;
-            x_m_instr_type <= instr_type;
-            x_m_load_size <= load_size;
-            x_m_alu_result <= alu_result;
-            
+        // If !if_id_enable, if_id_pc and if_id_instr hold their values
+    end
 
-            // x_m_zero_flag <= zero_flag;
+    // =========================================================================
+    // Stage 2: ID/EX (Decode, Register Read, Fast ALU & Multi-Unit Issue)
+    // =========================================================================
+    wire [4:0]  reg_sel_a;
+    wire [4:0]  reg_sel_b;
+    wire        en_write;
+    wire [4:0]  write_reg;
+    wire [4:0]  alu_op;
+    wire        write_en;
+    wire [19:0] imm;
+    wire        alu_en;
+    wire [3:0]  instr_type;
+    wire [2:0]  load_size;
+
+    control_unit cu (
+        .instr(if_id_instr),
+        .reg_sel_a(reg_sel_a),
+        .reg_sel_b(reg_sel_b),
+        .en_write(en_write),
+        .write_reg(write_reg),
+        .alu_op(alu_op),
+        .write_en(write_en),
+        .imm(imm),
+        .alu_en(alu_en),
+        .instr_type(instr_type),
+        .load_size(load_size)
+    );
+
+    // Register File & Stage 3 Writeback Connections
+    reg  [31:0] ex_mem_alu_result;
+    reg  [31:0] ex_mem_write_data;
+    reg  [4:0]  ex_mem_write_reg;
+    reg         ex_mem_en_write;
+    reg         ex_mem_write_en;
+    reg  [3:0]  ex_mem_instr_type;
+    reg  [2:0]  ex_mem_load_size;
+
+    wire [31:0] write_back_data;
+    wire [31:0] read_data1;
+    wire [31:0] read_data2;
+
+    register_file reg_file (
+        .clk(clk),
+        .rstn(rstn),
+        .en_write(ex_mem_en_write),
+        .write_reg(ex_mem_write_reg),
+        .write_data(write_back_data),
+        .read_reg1(reg_sel_a),
+        .read_reg2(reg_sel_b),
+        .read_data1(read_data1),
+        .read_data2(read_data2)
+    );
+
+    // Operand Forwarding from Stage 3 (MEM/WB) to Stage 2 (ID/EX)
+    wire forward_a = ex_mem_en_write && (ex_mem_write_reg != 5'd0) && (ex_mem_write_reg == reg_sel_a);
+    wire forward_b = ex_mem_en_write && (ex_mem_write_reg != 5'd0) && (ex_mem_write_reg == reg_sel_b);
+
+    wire [31:0] fwd_data_a = forward_a ? write_back_data : read_data1;
+    wire [31:0] fwd_data_b = forward_b ? write_back_data : read_data2;
+
+    // ALU Input Operand Multiplexing
+    wire [31:0] alu_A = (instr_type == 4'b0110) ? if_id_pc : // AUIPC: PC + imm
+                        (instr_type == 4'b1000) ? if_id_pc : // JAL: PC + 4 (return address)
+                        (instr_type == 4'b1001) ? if_id_pc : // JALR: PC + 4 (return address)
+                        fwd_data_a;
+
+    wire [31:0] alu_B = (instr_type == 4'b0000) ? fwd_data_b :                                  // R-type
+                        (instr_type == 4'b0001) ? {{12{imm[19]}}, imm} :                        // IL-type
+                        (instr_type == 4'b0010) ? {{12{imm[19]}}, imm} :                        // IA-type
+                        (instr_type == 4'b0011) ? {{12{imm[19]}}, imm} :                        // S-type
+                        (instr_type == 4'b0100) ? fwd_data_b :                                  // B-type (for comparison)
+                        (instr_type == 4'b0110) ? {imm, 12'h000} :                              // AUIPC
+                        (instr_type == 4'b0111) ? {imm, 12'h000} :                              // LUI
+                        (instr_type == 4'b1000) ? 32'h00000004 :                                // JAL (computes PC+4)
+                        (instr_type == 4'b1001) ? 32'h00000004 : 32'h00000000;                  // JALR (computes PC+4)
+
+    // ALU Subsystem Wrapper
+    wire [31:0] alu_result;
+    wire        carry;
+    wire        zero_flag;
+    wire        slt_result;
+    wire        sltu_result;
+    wire        alu_busy;
+    wire        alu_done;
+    wire [1:0]  active_unit;
+
+    alu alu_unit (
+        .clk(clk),
+        .rstn(rstn),
+        .alu_en(alu_en),
+        .A(alu_A),
+        .B(alu_B),
+        .alu_op(alu_op),
+        .result(alu_result),
+        .carry(carry),
+        .zero_flag(zero_flag),
+        .slt_result(slt_result),
+        .sltu_result(sltu_result),
+        .alu_busy(alu_busy),
+        .alu_done(alu_done),
+        .active_unit(active_unit)
+    );
+
+    // Branch & Jump Condition Evaluation (Stage 2)
+    wire branch_condition_met = (load_size == 3'b000) ? zero_flag :     // BEQ
+                                (load_size == 3'b001) ? !zero_flag :    // BNE
+                                (load_size == 3'b010) ? slt_result :    // BLT
+                                (load_size == 3'b011) ? !slt_result :   // BGE
+                                (load_size == 3'b100) ? sltu_result :   // BLTU
+                                (load_size == 3'b101) ? !sltu_result :  // BGEU
+                                1'b0;
+
+    assign branch_taken = (instr_type == 4'b0100) && branch_condition_met;
+    assign jump         = (instr_type == 4'b1000) || (instr_type == 4'b1001); // JAL / JALR
+
+    assign branch_target = (instr_type == 4'b1001) ? ((fwd_data_a + {{12{imm[19]}}, imm}) & ~32'd1) : // JALR: (rs1 + imm) & ~1
+                           (instr_type == 4'b1000) ? (if_id_pc + {{11{imm[19]}}, imm, 1'b0}) :        // JAL: PC + imm
+                           (instr_type == 4'b0100) ? (if_id_pc + {{12{imm[19]}}, imm}) :               // Branch: PC + imm
+                           (pc + 4);
+
+    // =========================================================================
+    // Hazard Detection, Scoreboard & Stall Control
+    // =========================================================================
+    wire stall_alu_busy = alu_busy;
+
+    // Load-Use Hazard: Instruction in Stage 2 depends on a Load currently in Stage 3
+    wire stall_load_use = (ex_mem_instr_type == 4'b0001) && (ex_mem_write_reg != 5'd0) &&
+                          ((ex_mem_write_reg == reg_sel_a) || (ex_mem_write_reg == reg_sel_b));
+
+    wire dmem_valid = (ex_mem_write_en || (ex_mem_instr_type == 4'b0001));
+    wire dmem_ready;
+    wire stall_dmem = dmem_valid && !dmem_ready;
+    wire stall_imem = imem_valid && !imem_ready;
+
+    assign freeze_all     = stall_dmem;
+    wire   stall_stage1_2 = freeze_all || stall_alu_busy || stall_load_use || stall_imem;
+    assign insert_bubble  = stall_alu_busy || stall_load_use;
+
+    assign pc_enable      = !stall_stage1_2;
+    assign if_id_enable   = !stall_stage1_2;
+    assign ex_mem_enable  = !freeze_all;
+
+    // EX/MEM Pipeline Register (Stage 2 -> Stage 3)
+    always @(posedge clk or negedge rstn) begin
+        if (!rstn) begin
+            ex_mem_alu_result <= 32'h00000000;
+            ex_mem_write_data <= 32'h00000000;
+            ex_mem_write_reg  <= 5'd0;
+            ex_mem_en_write   <= 1'b0;
+            ex_mem_write_en   <= 1'b0;
+            ex_mem_instr_type <= 4'd0;
+            ex_mem_load_size  <= 3'd0;
+        end else if (freeze_all) begin
+            // Hold Stage 3 registers during memory wait-state
+        end else if (insert_bubble) begin
+            // Inject NOP Bubble into Stage 3 to prevent data corruption
+            ex_mem_alu_result <= 32'h00000000;
+            ex_mem_write_data <= 32'h00000000;
+            ex_mem_write_reg  <= 5'd0;
+            ex_mem_en_write   <= 1'b0;
+            ex_mem_write_en   <= 1'b0;
+            ex_mem_instr_type <= 4'd0;
+            ex_mem_load_size  <= 3'd0;
+        end else begin
+            // Normal advance from Stage 2 to Stage 3
+            ex_mem_alu_result <= alu_result;
+            ex_mem_write_data <= fwd_data_b; // Store data (forwarded)
+            ex_mem_write_reg  <= write_reg;
+            ex_mem_en_write   <= en_write;
+            ex_mem_write_en   <= write_en;
+            ex_mem_instr_type <= instr_type;
+            ex_mem_load_size  <= load_size;
         end
     end
-end
 
+    // =========================================================================
+    // Stage 3: MEM/WB (Memory Access & Writeback)
+    // =========================================================================
+    wire [31:0] mem_addr = ex_mem_alu_result;
 
-// stage 3: Mem + WB
+    wire [3:0] byte_en = (ex_mem_instr_type == 4'b0011) ? (
+                            (ex_mem_load_size == 3'b000) ? (4'b0001 << mem_addr[1:0]) : // SB
+                            (ex_mem_load_size == 3'b001) ? (4'b0011 << mem_addr[1:0]) : // SH
+                            (ex_mem_load_size == 3'b010) ? (4'b1111 << mem_addr[1:0]) : // SW
+                            4'b0000
+                         ) : 4'b0000;
 
-wire [31:0] write_data; // data from  from  register file to mem or data written to mem
-wire [31:0] write_back_data; //  the data that actually goes to the reg values
+    wire [31:0] formatted_write_data = (ex_mem_load_size == 3'b000) ? {4{ex_mem_write_data[7:0]}} :   // SB
+                                       (ex_mem_load_size == 3'b001) ? {2{ex_mem_write_data[15:0]}} :  // SH
+                                       ex_mem_write_data;                                              // SW
 
-// reading mem\
-wire [31:0] addr; // address to be read from mem by the cu
-wire [31:0] data_out; // data read from the mem to the ........
+    wire [31:0] data_out;
 
+    data_mem mem (
+        .clk(clk),
+        .rstn(rstn),
+        .addr(mem_addr),
+        .valid(dmem_valid),
+        .write_en(ex_mem_write_en),
+        .byte_en(byte_en),
+        .write_data(formatted_write_data),
+        .ready(dmem_ready),
+        .data_out(data_out)
+    );
 
+    // Sub-word Load Alignment & Sign Extension
+    wire [31:0] shifted_data_out = data_out >> (8 * mem_addr[1:0]);
 
-assign addr = (x_m_instr_type == 4'b0001) ? x_m_alu_result : 
-              (x_m_instr_type == 4'b0011) ? x_m_alu_result : 32'h00000000;
+    wire [31:0] aligned_load_data = (ex_mem_load_size == 3'b000) ? {{24{shifted_data_out[7]}}, shifted_data_out[7:0]} :   // LB
+                                    (ex_mem_load_size == 3'b001) ? {{16{shifted_data_out[15]}}, shifted_data_out[15:0]} : // LH
+                                    (ex_mem_load_size == 3'b010) ? shifted_data_out :                                      // LW
+                                    (ex_mem_load_size == 3'b011) ? {24'h000000, shifted_data_out[7:0]} :                  // LBU
+                                    (ex_mem_load_size == 3'b100) ? {16'h0000, shifted_data_out[15:0]} :                   // LHU
+                                    shifted_data_out;
 
-wire [31:0] shifted_data_out;
-assign shifted_data_out = data_out >> (8 * addr[1:0]);
-
-assign write_back_data = (x_m_instr_type == 4'b0000) ? x_m_alu_result : 
-                        (x_m_instr_type == 4'b0001) ?  (x_m_load_size == 3'b000) ? {{24{shifted_data_out[7]}}, shifted_data_out[7:0]} : 
-                                                        (x_m_load_size == 3'b001) ? {{16{shifted_data_out[15]}}, shifted_data_out[15:0]} :
-                                                        (x_m_load_size == 3'b010) ? shifted_data_out :
-                                                        (x_m_load_size == 3'b011) ? {24'b0, shifted_data_out[7:0]} : 
-                                                        (x_m_load_size == 3'b100) ? {16'b0, shifted_data_out[15:0]} : 
-                                                        shifted_data_out :
-                        (x_m_instr_type == 4'b0010) ? x_m_alu_result : 
-                        (x_m_instr_type == 4'b0011) ? data_out : 
-                        (x_m_instr_type == 4'b0100) ? 32'h00000000 : 
-                        (x_m_instr_type == 4'b0101) ? 32'h00000000 : 
-                        (x_m_instr_type == 4'b0110) ? x_m_alu_result :
-                        (x_m_instr_type == 4'b0111) ? {x_m_imm, 12'h000} :
-                        (x_m_instr_type == 4'b1000) ? x_m_alu_result :
-                        (x_m_instr_type == 4'b1001) ? x_m_alu_result : 32'h00000000;
-
-wire [3:0] byte_en;
-assign byte_en = (x_m_instr_type == 4'b0011) ? (
-                     (x_m_load_size == 3'b000) ? (4'b0001 << addr[1:0]) : // SB
-                     (x_m_load_size == 3'b001) ? (4'b0011 << addr[1:0]) : // SH
-                     (x_m_load_size == 3'b010) ? (4'b1111 << addr[1:0]) : 4'b0000 // SW
-                 ) : 4'b0000;
-
-assign write_data = (x_m_instr_type == 4'b0011) ? (
-                        (x_m_load_size == 3'b000) ? {4{read_data2[7:0]}} :   // SB
-                        (x_m_load_size == 3'b001) ? {2{read_data2[15:0]}} :  // SH
-                        read_data2                                             // SW
-                    ) : 32'h00000000; 
-
-
-
-data_mem mem(
-
-    // input 
-    .clk(clk),
-    .addr(addr), // this addr can come for stage 2( directly) or in stage 3 
-    .write_en(x_m_write_en),
-    .byte_en(byte_en),
-    .write_data(write_data), // **** wrtie back from Execute stage
-    
-    // output
-    .data_out(data_out) // getting data is stage 2
-);
-
-
-register_file reg_file(
-    .clk(clk),
-    .rstn(rstn),
-
-    // input coming from execute stage
-    .en_write(x_m_en_write),
-    .write_reg(x_m_write_reg),
-    .write_data(write_back_data), 
-   
-   // inputs (( reading reg in stage 2 ))
-    .read_reg1(reg_sel_a),
-    .read_reg2(reg_sel_b),
-
-
-    // output
-    .read_data1(read_data1),
-    .read_data2(read_data2) 
-);
-
-always @(posedge clk or negedge rstn) begin
-    if(!rstn) begin
-        halt <= 1'b0;
-    end
-    else begin
-        halt <= (instr_type == 4'b0001 && halt == 1'b0) ? 1'b1 : 1'b0; // halt the pc if load instruction is encountered
-    end
-end
-
-
-
-// *********
-// this write data can come from 3 place 1) Mem using READ command 2) ALU using SUB,MOV ADD commands 3) from instruction direct  by immediate value 
-// If Opcode is 0 (LOADI), take immediate. If 4 (READ), take RAM. Else ALU.
-
-//***********
-
+    // Writeback Data Selection
+    assign write_back_data = (ex_mem_instr_type == 4'b0001) ? aligned_load_data : ex_mem_alu_result;
 
 endmodule

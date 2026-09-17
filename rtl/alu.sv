@@ -1,97 +1,88 @@
-module alu(
-    input alu_en,
-    input [31:0] A,
-    input [31:0] B,
+`timescale 1ns/1ps
+`default_nettype wire
 
-    input [4:0] alu_op, // operation alu perfroms
+module alu (
+    input  wire        clk,
+    input  wire        rstn,
+    input  wire        alu_en,
+    input  wire [31:0] A,
+    input  wire [31:0] B,
+    input  wire [4:0]  alu_op,
 
-    output reg [31:0] result,
-    output reg carry,
-    output reg zero_flag
+    output reg  [31:0] result,
+    output wire        carry,
+    output wire        zero_flag,
+    output wire        slt_result,
+    output wire        sltu_result,
+
+    output wire        alu_busy,
+    output wire        alu_done,
+    output wire [1:0]  active_unit // 2'b00 = INT, 2'b01 = MUL, 2'b10 = DIV
 );
 
+    // Demux: Select target functional unit based on alu_op
+    wire is_mul = alu_en && (alu_op >= 5'b01010 && alu_op <= 5'b01101);
+    wire is_div = alu_en && (alu_op >= 5'b01110 && alu_op <= 5'b10001);
+    wire is_int = alu_en && (!is_mul && !is_div);
 
+    assign active_unit = is_div ? 2'b10 : (is_mul ? 2'b01 : 2'b00);
 
-reg [63:0] mul_out;
+    // 1. Integer Functional Unit (1-Cycle)
+    wire [31:0] int_result;
+    alu_int u_alu_int (
+        .alu_en(is_int),
+        .A(A),
+        .B(B),
+        .alu_op(alu_op),
+        .result(int_result),
+        .carry(carry),
+        .zero_flag(zero_flag),
+        .slt_result(slt_result),
+        .sltu_result(sltu_result)
+    );
 
-always_comb begin
-    if (alu_en) begin
-        case(alu_op)
-        5'b00000: {carry,result} = A+B;
-        5'b00001: {carry,result} = A-B;
-        5'b00010:  result = A << B[4:0]; // SLL
-        5'b00011: begin
-            if (A[31] == B[31]) begin
-                result = A<B ? 32'h00000001 : 32'h00000000;
-            end
-            else begin
-                result = A[31] ? 32'h00000001 : 32'h00000000;
-            end
-        end
-        5'b00100: result = A < B ? 32'h00000001 : 32'h00000000; // SLTU
-        5'b00101: result = A ^ B; //XOR
-        5'b00110: result = A >> B[4:0];// SRL
-        5'b00111: result = $signed(A) >>> B[4:0]; // SRA
-        5'b01000: result = A|B; //OR
-        5'b01001: result = A&B; //AND
-        5'b01010:begin
-            mul_out = A*B;
-            result = mul_out[31:0]; // MUL (lower 32 bits)
-        end
-        5'b01011:begin
-            mul_out = $signed(A) * $signed(B);
-            result = mul_out[63:32]; // MULH (upper 32 bits, signed×signed)
-        end
-        5'b01100:begin
-            mul_out = $signed({{32{A[31]}}, A}) * $signed({1'b0, B});
-            result = mul_out[63:32]; // MULHSU (upper 32, signed×unsigned)
-        end
-        5'b01101:begin
-            mul_out = A * B;
-            result = mul_out[63:32]; // MULHU (upper 32, unsigned×unsigned)
-        end
-        5'b01110: begin // DIV (signed)
-            if (B == 32'h0)
-                result = 32'hFFFFFFFF; // div-by-zero → -1
-            else if (A == 32'h80000000 && B == 32'hFFFFFFFF)
-                result = 32'h80000000; // overflow: INT_MIN / -1 → INT_MIN
-            else
-                result = $signed(A) / $signed(B);
-        end
-        5'b01111: begin // DIVU (unsigned)
-            if (B == 32'h0)
-                result = 32'hFFFFFFFF; // div-by-zero → 2^32-1
-            else
-                result = A / B;
-        end
-        5'b10000: begin // REM (signed)
-            if (B == 32'h0)
-                result = A; // rem-by-zero → dividend
-            else if (A == 32'h80000000 && B == 32'hFFFFFFFF)
-                result = 32'h0; // overflow: INT_MIN % -1 → 0
-            else
-                result = $signed(A) % $signed(B);
-        end
-        5'b10001: begin // REMU (unsigned)
-            if (B == 32'h0)
-                result = A; // rem-by-zero → dividend
-            else
-                result = A % B;
-        end
-        default: result = 32'h00;
+    // 2. Multiplier Functional Unit (2-Stage Pipeline)
+    wire [31:0] mul_result;
+    wire mul_busy, mul_done;
+    multiplier u_multiplier (
+        .clk(clk),
+        .rstn(rstn),
+        .mul_en(is_mul),
+        .A(A),
+        .B(B),
+        .alu_op(alu_op),
+        .result(mul_result),
+        .busy(mul_busy),
+        .done(mul_done)
+    );
 
+    // 3. Divider Functional Unit (32-Cycle Iterative)
+    wire [31:0] div_result;
+    wire div_busy, div_done;
+    divider u_divider (
+        .clk(clk),
+        .rstn(rstn),
+        .div_en(is_div),
+        .A(A),
+        .B(B),
+        .alu_op(alu_op),
+        .result(div_result),
+        .busy(div_busy),
+        .done(div_done)
+    );
+
+    // Overall feedback signals sent to top_piplined.v
+    assign alu_busy = mul_busy || div_busy;
+    assign alu_done = is_int ? 1'b1 : (mul_done || div_done);
+
+    // Output Multiplexer
+    always @(*) begin
+        case (active_unit)
+            2'b00:   result = int_result;
+            2'b01:   result = mul_result;
+            2'b10:   result = div_result;
+            default: result = int_result;
         endcase
-
-        zero_flag = (result == 32'h00000000); // zero flag if result is 00
-    end else begin
-        result = 32'h00000000;
-        carry = 1'b0;
-        zero_flag = 1'b0;
     end
-end
 
-
-
-
-
-endmodule 
+endmodule

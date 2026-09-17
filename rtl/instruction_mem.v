@@ -1,39 +1,34 @@
+`timescale 1ns/1ps
 `default_nettype wire
 
-module instruction_mem(
-    input clk,
-    input [31:0] addr,
-    input rstn,
-    // input halt,
-    input ready,
-    output reg valid,
-    output reg [31:0] ins_out
-); 
+module instruction_mem #(
+    parameter HEX_FILE = ""
+)(
+    input  wire        clk,
+    input  wire        rstn,
+    input  wire [31:0] addr,       // Address from PC (byte address)
+    input  wire        valid,      // Driven by CPU: 1 when requesting instruction
+    output wire        ready,      // Driven by ROM: 1 when instruction is available
+    output wire [31:0] ins_out     // 32-bit instruction word
+);
 
-//Adding a Valid Ready Handshake to test out the working, will replace with full blown AHB later on
+    reg [31:0] rom [255:0];
 
-reg halt;
-
-assign halt = ~ (valid & ready);
-
-
-reg [31:0] rom [255:0];
-
-assign valid = 1'b1; // valid signal is always high, indicating that the instruction memory is always ready to provide the next instruction
-// initial begin
-//     $readmemh("/home/omkar/8bit_CPU_pipline/firmware/program.hex",rom);// loads the hex code
-// end
-
-// assign ins_out = rom[addr[9:2]]; // use the lower bit of pc
-
-always @(posedge clk or negedge rstn) begin
-    if(!rstn) begin
-        ins_out <= 32'h00000013;
-        // valid <= 1'b0;
+    // Initialize ROM to NOPs
+    integer i;
+    initial begin
+        for (i = 0; i < 256; i = i + 1) begin
+            rom[i] = 32'h00000013; // NOP (ADDI x0, x0, 0)
+        end
+        if (HEX_FILE != "") begin
+            $readmemh(HEX_FILE, rom);
+        end
     end
-    else begin
-        ins_out <= (addr[9:2] < 256) ? (halt) ? ins_out : rom[addr[9:2]] :32'h00000013; // reading the data from the memory
-        // valid <= 1'b1;
-    end
-end
+
+    // Ready responds directly to valid in 1-cycle zero-wait-state mode
+    assign ready = valid;
+
+    // Word indexing with boundary check: returns NOP if out of bounds or invalid
+    assign ins_out = (valid && (addr[9:2] < 256)) ? rom[addr[9:2]] : 32'h00000013;
+
 endmodule

@@ -18,10 +18,13 @@ make -C ..
 # 2. Compile Verilog simulation binary
 echo "[2/3] Compiling Verilog..."
 iverilog -g2012 -o "$SIM_OUT" \
+    "$RTL_DIR"/alu_int.sv \
     "$RTL_DIR"/alu.sv \
     "$RTL_DIR"/control_unit.v \
     "$RTL_DIR"/data_mem.v \
+    "$RTL_DIR"/divider.sv \
     "$RTL_DIR"/instruction_mem.v \
+    "$RTL_DIR"/multiplier.sv \
     "$RTL_DIR"/program_counter.v \
     "$RTL_DIR"/register_file.v \
     "$RTL_DIR"/top_piplined.v \

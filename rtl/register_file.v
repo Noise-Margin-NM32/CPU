@@ -1,50 +1,41 @@
-module register_file( // planned to have 8 register in one register file
-    input clk,
-    input rstn,
-    input en_write, // enable to right to register ( 3 bit value to code for a reg)
-    input [4:0] write_reg, // which address to be written to
-    input [31:0] write_data, 
-    
-    // which reg to read data from 
-    input [4:0] read_reg1, // read port1
-    input [4:0] read_reg2, // read port2
+`timescale 1ns/1ps
+`default_nettype wire
 
-    output [31:0] read_data1,
-    output [31:0] read_data2
+module register_file (
+    input  wire        clk,
+    input  wire        rstn,
+    input  wire        en_write,
+    input  wire [4:0]  write_reg,
+    input  wire [31:0] write_data,
+    
+    input  wire [4:0]  read_reg1,
+    input  wire [4:0]  read_reg2,
+
+    output wire [31:0] read_data1,
+    output wire [31:0] read_data2
 );
 
+    reg [31:0] registers [31:0];
 
-// create 32 register  32 bit
-reg [31:0] registers [31:0]; //x0 - x31 internal riscv registers
+    // Asynchronous read with internal write-through bypass:
+    // If writing to rd in the same cycle as reading rs, forward write_data immediately
+    assign read_data1 = (read_reg1 == 5'b00000) ? 32'h00000000 :
+                        (en_write && (write_reg != 5'b00000) && (write_reg == read_reg1)) ? write_data :
+                        registers[read_reg1];
 
-// assign registers[0] = 32'h00000000; // hardwired to 0 x0
+    assign read_data2 = (read_reg2 == 5'b00000) ? 32'h00000000 :
+                        (en_write && (write_reg != 5'b00000) && (write_reg == read_reg2)) ? write_data :
+                        registers[read_reg2];
 
-
-// asynchronous read  why ?
-assign read_data1 = (read_reg1 == 5'b00000) ? 32'h00000000 : registers[read_reg1];            
-assign read_data2 = (read_reg2 == 5'b00000) ? 32'h00000000 : registers[read_reg2];   
-
-// now take care of rst and read 
-
-integer i;
-always @(posedge clk or negedge rstn) begin
-
-    if(!rstn) begin
-        for(i =1; i<32; i = i+1)begin
-            registers[i] <= 32'h00000000; // clearing all the registers
-        end 
-    end 
-
-    else if(en_write) begin
-        registers[write_reg] <= (write_reg != 5'b0) ? write_data : 32'h00000000; // write to the register file if not x0
-
+    integer i;
+    always @(posedge clk or negedge rstn) begin
+        if (!rstn) begin
+            for (i = 0; i < 32; i = i + 1) begin
+                registers[i] <= 32'h00000000;
+            end
+        end else if (en_write && (write_reg != 5'b00000)) begin
+            registers[write_reg] <= write_data;
+        end
     end
-
-end 
-
-
-
-
-
 
 endmodule
