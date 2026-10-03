@@ -1,7 +1,9 @@
 `timescale 1ns/1ps
 `default_nettype wire
 
-module top_piplined (
+module top_piplined #(
+    parameter HEX_FILE = ""
+)(
     input wire clk,
     input wire rstn
 );
@@ -35,7 +37,7 @@ module top_piplined (
     wire [31:0] instruction_r;
 
     instruction_mem #(
-        .HEX_FILE("/home/omkar/8bit_CPU_pipline/firmware/program.hex")
+        .HEX_FILE(HEX_FILE)
     ) ROM (
         .clk(clk),
         .rstn(rstn),

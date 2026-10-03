@@ -1,7 +1,9 @@
 `timescale 1ns/1ps
 `default_nettype wire
 
-module data_mem (
+module data_mem #(
+    parameter WORDS = 4096
+)(
     input  wire        clk,
     input  wire        rstn,
     input  wire [31:0] addr,        // Address from Stage 3 (ALU result)
@@ -13,12 +15,12 @@ module data_mem (
     output wire [31:0] data_out     // Read data word
 );
 
-    reg [31:0] ram [255:0];
+    reg [31:0] ram [WORDS-1:0];
 
     // Initialize RAM to 0
     integer i;
     initial begin
-        for (i = 0; i < 256; i = i + 1) begin
+        for (i = 0; i < WORDS; i = i + 1) begin
             ram[i] = 32'h00000000;
         end
     end
@@ -28,15 +30,15 @@ module data_mem (
 
     // Synchronous write on rising clock edge with byte enables
     always @(posedge clk) begin
-        if (valid && write_en) begin
-            if (byte_en[0]) ram[addr[9:2]][7:0]   <= write_data[7:0];
-            if (byte_en[1]) ram[addr[9:2]][15:8]  <= write_data[15:8];
-            if (byte_en[2]) ram[addr[9:2]][23:16] <= write_data[23:16];
-            if (byte_en[3]) ram[addr[9:2]][31:24] <= write_data[31:24];
+        if (valid && write_en && (addr[13:2] < WORDS)) begin
+            if (byte_en[0]) ram[addr[13:2]][7:0]   <= write_data[7:0];
+            if (byte_en[1]) ram[addr[13:2]][15:8]  <= write_data[15:8];
+            if (byte_en[2]) ram[addr[13:2]][23:16] <= write_data[23:16];
+            if (byte_en[3]) ram[addr[13:2]][31:24] <= write_data[31:24];
         end
     end
 
     // Asynchronous read (available during Stage 3 for sub-word alignment and writeback)
-    assign data_out = (valid && !write_en && (addr[9:2] < 256)) ? ram[addr[9:2]] : 32'h00000000;
+    assign data_out = (valid && !write_en && (addr[13:2] < WORDS)) ? ram[addr[13:2]] : 32'h00000000;
 
 endmodule
