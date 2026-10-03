@@ -1,0 +1,166 @@
+
+programs/program.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00000000 <_start>:
+   0:	40000113          	li	sp,1024
+   4:	248000ef          	jal	24c <main>
+
+00000008 <_halt>:
+   8:	0000006f          	j	8 <_halt>
+
+0000000c <add_func>:
+   c:	00b50533          	add	a0,a0,a1
+  10:	00008067          	ret
+
+00000014 <test_riscv_instructions>:
+  14:	00000693          	li	a3,0
+  18:	01600613          	li	a2,22
+  1c:	ff010113          	addi	sp,sp,-16
+  20:	00800593          	li	a1,8
+  24:	00c6a023          	sw	a2,0(a3)
+  28:	00b6a223          	sw	a1,4(a3)
+  2c:	06900793          	li	a5,105
+  30:	00f6a423          	sw	a5,8(a3)
+  34:	00200793          	li	a5,2
+  38:	00f6a623          	sw	a5,12(a3)
+  3c:	00100793          	li	a5,1
+  40:	00f6a823          	sw	a5,16(a3)
+  44:	07300713          	li	a4,115
+  48:	00e6aa23          	sw	a4,20(a3)
+  4c:	00700713          	li	a4,7
+  50:	00e6ac23          	sw	a4,24(a3)
+  54:	00f00713          	li	a4,15
+  58:	00e6ae23          	sw	a4,28(a3)
+  5c:	02b6a023          	sw	a1,32(a3)
+  60:	02e6a223          	sw	a4,36(a3)
+  64:	02e6a423          	sw	a4,40(a3)
+  68:	0206a623          	sw	zero,44(a3)
+  6c:	07800713          	li	a4,120
+  70:	02e6a823          	sw	a4,48(a3)
+  74:	20000737          	lui	a4,0x20000
+  78:	02f6aa23          	sw	a5,52(a3)
+  7c:	fe070713          	addi	a4,a4,-32 # 1fffffe0 <main+0x1ffffd94>
+  80:	02e6ac23          	sw	a4,56(a3)
+  84:	0206ae23          	sw	zero,60(a3)
+  88:	04f6a023          	sw	a5,64(a3)
+  8c:	0406a223          	sw	zero,68(a3)
+  90:	02d00713          	li	a4,45
+  94:	04e6a423          	sw	a4,72(a3)
+  98:	04f6a623          	sw	a5,76(a3)
+  9c:	04f6a823          	sw	a5,80(a3)
+  a0:	04f6aa23          	sw	a5,84(a3)
+  a4:	04f6ac23          	sw	a5,88(a3)
+  a8:	04c6ae23          	sw	a2,92(a3)
+  ac:	000017b7          	lui	a5,0x1
+  b0:	07f00613          	li	a2,127
+  b4:	06c6a223          	sw	a2,100(a3)
+  b8:	23478793          	addi	a5,a5,564 # 1234 <main+0xfe8>
+  bc:	06f6a623          	sw	a5,108(a3)
+  c0:	0ff00593          	li	a1,255
+  c4:	deadc737          	lui	a4,0xdeadc
+  c8:	06b6aa23          	sw	a1,116(a3)
+  cc:	eef70713          	addi	a4,a4,-273 # deadbeef <main+0xdeadbca3>
+  d0:	06e6ac23          	sw	a4,120(a3)
+  d4:	0786a703          	lw	a4,120(a3)
+  d8:	fff00593          	li	a1,-1
+  dc:	06f69423          	sh	a5,104(a3)
+  e0:	06c68023          	sb	a2,96(a3)
+  e4:	06b68823          	sb	a1,112(a3)
+  e8:	ff100793          	li	a5,-15
+  ec:	06e6ae23          	sw	a4,124(a3)
+  f0:	08f6a023          	sw	a5,128(a3)
+  f4:	f9700793          	li	a5,-105
+  f8:	08f6a223          	sw	a5,132(a3)
+  fc:	01400593          	li	a1,20
+ 100:	00000793          	li	a5,0
+ 104:	02f78633          	mul	a2,a5,a5
+ 108:	02278713          	addi	a4,a5,34
+ 10c:	00271713          	slli	a4,a4,0x2
+ 110:	00e68733          	add	a4,a3,a4
+ 114:	00178793          	addi	a5,a5,1
+ 118:	00c72023          	sw	a2,0(a4)
+ 11c:	feb794e3          	bne	a5,a1,104 <test_riscv_instructions+0xf0>
+ 120:	00500593          	li	a1,5
+ 124:	00a58713          	addi	a4,a1,10
+ 128:	01470713          	addi	a4,a4,20
+ 12c:	40b70733          	sub	a4,a4,a1
+ 130:	00271713          	slli	a4,a4,0x2
+ 134:	0ce6a423          	sw	a4,200(a3)
+ 138:	02a00713          	li	a4,42
+ 13c:	00e12623          	sw	a4,12(sp)
+ 140:	00c10613          	addi	a2,sp,12
+ 144:	00062703          	lw	a4,0(a2)
+ 148:	02a70713          	addi	a4,a4,42
+ 14c:	0ce6a623          	sw	a4,204(a3)
+ 150:	00a00713          	li	a4,10
+ 154:	02e70633          	mul	a2,a4,a4
+ 158:	00f60613          	addi	a2,a2,15
+ 15c:	0cc6a823          	sw	a2,208(a3)
+ 160:	06400613          	li	a2,100
+ 164:	02e64533          	div	a0,a2,a4
+ 168:	06350513          	addi	a0,a0,99
+ 16c:	0ca6aa23          	sw	a0,212(a3)
+ 170:	00012423          	sw	zero,8(sp)
+ 174:	00700813          	li	a6,7
+ 178:	00810893          	addi	a7,sp,8
+ 17c:	02e802b3          	mul	t0,a6,a4
+ 180:	0058a023          	sw	t0,0(a7)
+ 184:	0008a503          	lw	a0,0(a7)
+ 188:	00550513          	addi	a0,a0,5
+ 18c:	0ca6ac23          	sw	a0,216(a3)
+ 190:	02b642b3          	div	t0,a2,a1
+ 194:	00f28663          	beq	t0,a5,1a0 <test_riscv_instructions+0x18c>
+ 198:	00000813          	li	a6,0
+ 19c:	0080006f          	j	1a4 <test_riscv_instructions+0x190>
+ 1a0:	00100813          	li	a6,1
+ 1a4:	03200513          	li	a0,50
+ 1a8:	0d06ae23          	sw	a6,220(a3)
+ 1ac:	00050293          	mv	t0,a0
+ 1b0:	00070313          	mv	t1,a4
+ 1b4:	006287b3          	add	a5,t0,t1
+ 1b8:	3e700293          	li	t0,999
+ 1bc:	00028613          	mv	a2,t0
+ 1c0:	fc478793          	addi	a5,a5,-60
+ 1c4:	c1960613          	addi	a2,a2,-999
+ 1c8:	00163613          	seqz	a2,a2
+ 1cc:	0017b793          	seqz	a5,a5
+ 1d0:	00c7f7b3          	and	a5,a5,a2
+ 1d4:	0ef6a023          	sw	a5,224(a3)
+ 1d8:	02b582b3          	mul	t0,a1,a1
+ 1dc:	30900293          	li	t0,777
+ 1e0:	00028793          	mv	a5,t0
+ 1e4:	0ef6a223          	sw	a5,228(a3)
+ 1e8:	06f00293          	li	t0,111
+ 1ec:	0de00293          	li	t0,222
+ 1f0:	14d00293          	li	t0,333
+ 1f4:	00028793          	mv	a5,t0
+ 1f8:	0ef6a423          	sw	a5,232(a3)
+ 1fc:	00012223          	sw	zero,4(sp)
+ 200:	00410593          	addi	a1,sp,4
+ 204:	00c00293          	li	t0,12
+ 208:	00800313          	li	t1,8
+ 20c:	006283b3          	add	t2,t0,t1
+ 210:	00600e13          	li	t3,6
+ 214:	03c38eb3          	mul	t4,t2,t3
+ 218:	00500f13          	li	t5,5
+ 21c:	03eecfb3          	div	t6,t4,t5
+ 220:	00700713          	li	a4,7
+ 224:	02efe7b3          	rem	a5,t6,a4
+ 228:	00f5a023          	sw	a5,0(a1)
+ 22c:	0005a803          	lw	a6,0(a1)
+ 230:	0c880613          	addi	a2,a6,200
+ 234:	abcd17b7          	lui	a5,0xabcd1
+ 238:	0ec6a623          	sw	a2,236(a3)
+ 23c:	23478793          	addi	a5,a5,564 # abcd1234 <main+0xabcd0fe8>
+ 240:	3ef6ac23          	sw	a5,1016(a3)
+ 244:	01010113          	addi	sp,sp,16
+ 248:	00008067          	ret
+
+0000024c <main>:
+ 24c:	ff010113          	addi	sp,sp,-16
+ 250:	00112623          	sw	ra,12(sp)
+ 254:	dc1ff0ef          	jal	14 <test_riscv_instructions>
+ 258:	0000006f          	j	258 <main+0xc>

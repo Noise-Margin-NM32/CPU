@@ -1,15 +1,15 @@
 `timescale 1ns/1ps
 module tb_c();
-    reg clk, rst;
-    top_piplined uut (.clk(clk), .rst(rst));
+    reg clk, rstn;
+    top_piplined uut (.clk(clk), .rstn(rstn));
 
     always #5 clk = ~clk;
 
     initial begin
-        clk = 0; rst = 0;
+        clk = 0; rstn = 0;
         #20;
-        rst = 1; // Release reset
-        
+        rstn = 1; // Release reset
+
         // Wait until completion marker is written to RAM[254]
         // or a timeout occurs
         fork
@@ -19,6 +19,7 @@ module tb_c();
                 $display("==================================================");
                 $display("   RISC-V C Program executed successfully!");
                 $display("==================================================");
+                $display("--- Base RV32IM C Functionality ---");
                 $display("mem[0]  (add: 15 + 7)         = %d (Expected: 22)", uut.mem.ram[0]);
                 $display("mem[1]  (sub: 15 - 7)         = %d (Expected: 8)", uut.mem.ram[1]);
                 $display("mem[2]  (mul: 15 * 7)         = %d (Expected: 105)", uut.mem.ram[2]);
@@ -34,15 +35,48 @@ module tb_c();
                 $display("mem[25] (sb -> lb: 0x7f)      = 0x%h (Expected: 0x7f)", uut.mem.ram[25]);
                 $display("mem[27] (sh -> lh: 0x1234)    = 0x%h (Expected: 0x1234)", uut.mem.ram[27]);
                 $display("mem[31] (lw: DEADBEEF)        = 0x%h (Expected: 0xdeadbeef)", uut.mem.ram[31]);
+                $display("--------------------------------------------------");
+                $display("--- Hardware Hazard & Pipeline Stalling Tests ---");
+                $display("mem[50] (RAW: Chained ALU Fwd)  = %d (Expected: 120)", uut.mem.ram[50]);
+                $display("mem[51] (RAW: Load-Use Stall)   = %d (Expected: 84)", uut.mem.ram[51]);
+                $display("mem[52] (RAW: Multiplier Stall) = %d (Expected: 115)", uut.mem.ram[52]);
+                $display("mem[53] (RAW: Divider Stall)    = %d (Expected: 109)", uut.mem.ram[53]);
+                $display("mem[54] (RAW: MUL -> Store SW)  = %d (Expected: 75)", uut.mem.ram[54]);
+                $display("mem[55] (RAW: DIV -> Branch)    = %d (Expected: 1)", uut.mem.ram[55]);
+                $display("mem[56] (WAR: Write-After-Read) = %d (Expected: 1)", uut.mem.ram[56]);
+                $display("mem[57] (WAW: MUL -> ADDI)      = %d (Expected: 777)", uut.mem.ram[57]);
+                $display("mem[58] (WAW: ALU Back-to-Back) = %d (Expected: 333)", uut.mem.ram[58]);
+                $display("mem[59] (Mixed Multi-Unit Stress)= %d (Expected: 203)", uut.mem.ram[59]);
+                $display("==================================================");
+
+                // Verification check
+                if (uut.mem.ram[50] == 120 && uut.mem.ram[51] == 84 && uut.mem.ram[52] == 115 &&
+                    uut.mem.ram[53] == 109 && uut.mem.ram[54] == 75 && uut.mem.ram[55] == 1 &&
+                    uut.mem.ram[56] == 1 && uut.mem.ram[57] == 777 && uut.mem.ram[58] == 333 &&
+                    uut.mem.ram[59] == 203) begin
+                    $display(">>> ALL HARDWARE HAZARD & STALLING TESTS PASSED! <<<");
+                end else begin
+                    $display(">>> ERROR: ONE OR MORE HAZARD TESTS FAILED! <<<");
+                end
                 $display("==================================================");
                 $finish;
             end
             begin
-                #100000; // Timeout after 10,000 clock cycles
+                #200000; // Timeout after 20,000 clock cycles
                 $display("--------------------------------------------------");
                 $display("ERROR: Simulation timed out (completion marker not found).");
                 $display("Current RAM[254] value: 0x%h", uut.mem.ram[254]);
                 $display("--------------------------------------------------");
+                $display("mem[50] (RAW: Chained ALU Fwd)  = %d (Expected: 120)", uut.mem.ram[50]);
+                $display("mem[51] (RAW: Load-Use Stall)   = %d (Expected: 84)", uut.mem.ram[51]);
+                $display("mem[52] (RAW: Multiplier Stall) = %d (Expected: 115)", uut.mem.ram[52]);
+                $display("mem[53] (RAW: Divider Stall)    = %d (Expected: 109)", uut.mem.ram[53]);
+                $display("mem[54] (RAW: MUL -> Store SW)  = %d (Expected: 75)", uut.mem.ram[54]);
+                $display("mem[55] (RAW: DIV -> Branch)    = %d (Expected: 1)", uut.mem.ram[55]);
+                $display("mem[56] (WAR: Write-After-Read) = %d (Expected: 1)", uut.mem.ram[56]);
+                $display("mem[57] (WAW: MUL -> ADDI)      = %d (Expected: 777)", uut.mem.ram[57]);
+                $display("mem[58] (WAW: ALU Back-to-Back) = %d (Expected: 333)", uut.mem.ram[58]);
+                $display("mem[59] (Mixed Multi-Unit Stress)= %d (Expected: 203)", uut.mem.ram[59]);
                 $finish;
             end
         join
@@ -51,7 +85,7 @@ module tb_c();
     initial begin
         $dumpfile("c_sim.vcd");
         $dumpvars(0, tb_c);
-        $monitor("Time=%0t PC=%h if_id_instr=%h if_id_pc=%h id_ex_instr_type=%h alu_A=%h alu_B=%h alu_res=%h write_data=%h write_back_data=%h sp=%h x10=%h x11=%h",
-                 $time, uut.pc, uut.if_id_instr, uut.if_id_pc, uut.id_ex_instr_type, uut.alu_unit.A, uut.alu_unit.B, uut.alu_unit.result, uut.write_data, uut.write_back_data, uut.reg_file.registers[2], uut.reg_file.registers[10], uut.reg_file.registers[11]);
+        // $monitor("Time=%0t PC=%h if_id_instr=%h if_id_pc=%h x_m_instr_type=%h alu_A=%h alu_B=%h alu_res=%h write_data=%h write_back_data=%h sp=%h x10=%h x11=%h",
+        //          $time, uut.pc, uut.if_id_instr, uut.if_id_pc, uut.x_m_instr_type, uut.alu_unit.A, uut.alu_unit.B, uut.alu_unit.result, uut.write_data, uut.write_back_data, uut.reg_file.registers[2], uut.reg_file.registers[10], uut.reg_file.registers[11]);
     end
 endmodule
