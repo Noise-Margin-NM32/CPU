@@ -4,15 +4,17 @@
 module data_mem #(
     parameter WORDS = 4096
 )(
-    input  wire        clk,
-    input  wire        rstn,
-    input  wire [31:0] addr,        // Address from Stage 3 (ALU result)
-    input  wire        valid,       // Driven by CPU: 1 when Load or Store is active
-    input  wire        write_en,    // 1 for Store, 0 for Load
-    input  wire [3:0]  byte_en,     // Byte-enable strobe (SB=4'b0001, SH=4'b0011, SW=4'b1111 shifted)
-    input  wire [31:0] write_data,  // Data to write (shifted into proper byte position)
-    output wire        ready,       // Driven by RAM: 1 when transaction completes
-    output wire [31:0] data_out     // Read data word
+    input  wire        HCLK,
+    input  wire        HRESETn,
+    input  wire [31:0] HADDR,
+    input  wire [1:0]  HTRANS,
+    input  wire        HWRITE,
+    input  wire [2:0]  HSIZE,
+    input  wire [31:0] HWDATA,
+    input  wire        HREADY,
+    output wire        HREADYOUT,
+    output wire [31:0] HRDATA,
+    output wire        HRESP
 );
 
     reg [31:0] ram [WORDS-1:0];
@@ -25,20 +27,57 @@ module data_mem #(
         end
     end
 
-    // RAM responds when valid is asserted
-    assign ready = valid;
+    // AHB-Lite Pipelined Address Phase
+    reg [11:0] addr_reg;
+    reg [1:0]  byte_off_reg;
+    reg        write_reg;
+    reg [2:0]  size_reg;
+    reg        trans_active;
 
-    // Synchronous write on rising clock edge with byte enables
-    always @(posedge clk) begin
-        if (valid && write_en && (addr[13:2] < WORDS)) begin
-            if (byte_en[0]) ram[addr[13:2]][7:0]   <= write_data[7:0];
-            if (byte_en[1]) ram[addr[13:2]][15:8]  <= write_data[15:8];
-            if (byte_en[2]) ram[addr[13:2]][23:16] <= write_data[23:16];
-            if (byte_en[3]) ram[addr[13:2]][31:24] <= write_data[31:24];
+    always @(posedge HCLK or negedge HRESETn) begin
+        if (!HRESETn) begin
+            addr_reg     <= 12'd0;
+            byte_off_reg <= 2'd0;
+            write_reg    <= 1'b0;
+            size_reg     <= 3'b010;
+            trans_active <= 1'b0;
+        end else if (HREADY) begin
+            addr_reg     <= HADDR[13:2];
+            byte_off_reg <= HADDR[1:0];
+            write_reg    <= HWRITE;
+            size_reg     <= HSIZE;
+            trans_active <= HTRANS[1]; // Active for NONSEQ (2'b10) or SEQ (2'b11)
         end
     end
 
-    // Asynchronous read (available during Stage 3 for sub-word alignment and writeback)
-    assign data_out = (valid && !write_en && (addr[13:2] < WORDS)) ? ram[addr[13:2]] : 32'h00000000;
+    // Data Phase Write Execution (Synchronous to HCLK)
+    always @(posedge HCLK) begin
+        if (HREADY && trans_active && write_reg && (addr_reg < WORDS)) begin
+            case (size_reg)
+                3'b000: begin // Byte write
+                    case (byte_off_reg)
+                        2'b00: ram[addr_reg][7:0]   <= HWDATA[7:0];
+                        2'b01: ram[addr_reg][15:8]  <= HWDATA[15:8];
+                        2'b10: ram[addr_reg][23:16] <= HWDATA[23:16];
+                        2'b11: ram[addr_reg][31:24] <= HWDATA[31:24];
+                    endcase
+                end
+                3'b001: begin // Halfword write
+                    if (!byte_off_reg[1])
+                        ram[addr_reg][15:0]  <= HWDATA[15:0];
+                    else
+                        ram[addr_reg][31:16] <= HWDATA[31:16];
+                end
+                default: begin // Word write (3'b010)
+                    ram[addr_reg] <= HWDATA;
+                end
+            endcase
+        end
+    end
+
+    // Data Phase Outputs
+    assign HREADYOUT = 1'b1;
+    assign HRESP     = 1'b0; // OKAY
+    assign HRDATA    = (trans_active && !write_reg && (addr_reg < WORDS)) ? ram[addr_reg] : 32'h00000000;
 
 endmodule

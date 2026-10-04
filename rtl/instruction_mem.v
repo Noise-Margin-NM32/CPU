@@ -5,12 +5,17 @@ module instruction_mem #(
     parameter HEX_FILE = "",
     parameter WORDS    = 4096
 )(
-    input  wire        clk,
-    input  wire        rstn,
-    input  wire [31:0] addr,       // Address from PC (byte address)
-    input  wire        valid,      // Driven by CPU: 1 when requesting instruction
-    output wire        ready,      // Driven by ROM: 1 when instruction is available
-    output wire [31:0] ins_out     // 32-bit instruction word
+    input  wire        HCLK,
+    input  wire        HRESETn,
+    input  wire [31:0] HADDR,
+    input  wire [1:0]  HTRANS,
+    input  wire        HWRITE,
+    input  wire [2:0]  HSIZE,
+    input  wire [31:0] HWDATA,
+    input  wire        HREADY,
+    output wire        HREADYOUT,
+    output wire [31:0] HRDATA,
+    output wire        HRESP
 );
 
     reg [31:0] rom [WORDS-1:0];
@@ -26,10 +31,23 @@ module instruction_mem #(
         end
     end
 
-    // Ready responds directly to valid in 1-cycle zero-wait-state mode
-    assign ready = valid;
+    // AHB-Lite Pipelined Read Engine
+    reg [11:0] addr_reg;
+    reg        trans_active;
 
-    // Word indexing with boundary check: returns NOP if out of bounds or invalid
-    assign ins_out = (valid && (addr[13:2] < WORDS)) ? rom[addr[13:2]] : 32'h00000013;
+    always @(posedge HCLK or negedge HRESETn) begin
+        if (!HRESETn) begin
+            addr_reg     <= 12'd0;
+            trans_active <= 1'b0;
+        end else if (HREADY) begin
+            addr_reg     <= HADDR[13:2];
+            trans_active <= HTRANS[1]; // Active for NONSEQ (2'b10) or SEQ (2'b11)
+        end
+    end
+
+    // Data Phase outputs
+    assign HREADYOUT = 1'b1;
+    assign HRESP     = 1'b0; // OKAY
+    assign HRDATA    = (trans_active && (addr_reg < WORDS)) ? rom[addr_reg] : 32'h00000013;
 
 endmodule

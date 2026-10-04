@@ -2,11 +2,43 @@
 `default_nettype wire
 
 module top_piplined #(
-    parameter HEX_FILE = ""
+    parameter ADDR_WIDTH = 32,
+    parameter DATA_WIDTH = 32
 )(
-    input wire clk,
-    input wire rstn
+    input  wire                   clk,
+    input  wire                   rstn,
+
+    // =========================================================================
+    // Instruction Port (AHB-Lite Master - Read Only)
+    // =========================================================================
+    output wire [1:0]             instr_htrans,
+    output wire [ADDR_WIDTH-1:0]  instr_haddr,
+    output wire                   instr_hwrite,  // Tied to 1'b0
+    output wire [2:0]             instr_hsize,   // Tied to 3'b010
+    output wire [DATA_WIDTH-1:0]  instr_hwdata,  // Tied to 32'h0
+    input  wire                   instr_hready,
+    input  wire [DATA_WIDTH-1:0]  instr_hrdata,
+    input  wire                   instr_hresp,
+
+    // =========================================================================
+    // Data Port (AHB Master)
+    // =========================================================================
+    output reg                    data_hbusreq,
+    output reg  [1:0]             data_htrans,
+    output reg  [ADDR_WIDTH-1:0]  data_haddr,
+    output reg                    data_hwrite,
+    output reg  [2:0]             data_hsize,
+    output reg  [DATA_WIDTH-1:0]  data_hwdata,
+    input  wire                   data_hgrant,
+    input  wire                   data_hready,
+    input  wire [DATA_WIDTH-1:0]  data_hrdata,
+    input  wire                   data_hresp
 );
+
+    // Static AHB-Lite Instruction Port Tie-offs
+    assign instr_hwrite = 1'b0;
+    assign instr_hsize  = 3'b010; // 32-bit instruction word
+    assign instr_hwdata = 32'h00000000;
 
     // =========================================================================
     // Stage 1: IF (Instruction Fetch)
@@ -21,6 +53,7 @@ module top_piplined #(
     wire        ex_mem_enable;
     wire        insert_bubble;
     wire        freeze_all;
+    wire        stall_stage1_2;
 
     program_counter pc_inst (
         .clk(clk),
@@ -32,37 +65,69 @@ module top_piplined #(
         .pc(pc)
     );
 
-    wire        imem_valid = rstn;
-    wire        imem_ready;
-    wire [31:0] instruction_r;
+    assign instr_haddr = pc;
 
-    instruction_mem #(
-        .HEX_FILE(HEX_FILE)
-    ) ROM (
-        .clk(clk),
-        .rstn(rstn),
-        .addr(pc),
-        .valid(imem_valid),
-        .ready(imem_ready),
-        .ins_out(instruction_r)
-    );
+    // Instruction Fetch Tracking & Skid Buffer
+    reg [31:0] fetch_pc;
+    reg        fetch_valid;
+    reg [31:0] skid_instr;
+    reg [31:0] skid_pc;
+    reg        skid_valid;
+
+    assign instr_htrans = (!rstn) ? 2'b00 :
+                          (stall_stage1_2 && skid_valid) ? 2'b00 : 2'b10;
 
     // IF/ID Pipeline Register
     reg [31:0] if_id_pc;
     reg [31:0] if_id_instr;
 
+    wire stall_imem = fetch_valid && !instr_hready;
+
     always @(posedge clk or negedge rstn) begin
         if (!rstn) begin
-            if_id_pc    <= 32'h00000000;
-            if_id_instr <= 32'h00000013; // NOP (ADDI x0, x0, 0)
-        end else if (branch_taken || jump) begin
-            if_id_instr <= 32'h00000013; // Flush wrong-path instruction to NOP
-            if_id_pc    <= branch_target;
-        end else if (if_id_enable) begin
-            if_id_pc    <= pc;
-            if_id_instr <= instruction_r;
+            fetch_pc     <= 32'h00000000;
+            fetch_valid  <= 1'b0;
+            skid_instr   <= 32'h00000013;
+            skid_pc      <= 32'h00000000;
+            skid_valid   <= 1'b0;
+            if_id_pc     <= 32'h00000000;
+            if_id_instr  <= 32'h00000013; // NOP (ADDI x0, x0, 0)
+        end else if (instr_hready) begin
+            if (!stall_stage1_2) begin
+                if (branch_taken || jump) begin
+                    if_id_instr <= 32'h00000013; // Flush wrong-path instruction to NOP
+                    if_id_pc    <= branch_target;
+                    fetch_pc    <= branch_target;
+                    fetch_valid <= 1'b0;
+                    skid_valid  <= 1'b0;
+                end else if (skid_valid) begin
+                    // Consume skid buffer
+                    if_id_instr <= skid_instr;
+                    if_id_pc    <= skid_pc;
+                    skid_valid  <= 1'b0;
+                    fetch_pc    <= pc;
+                    fetch_valid <= 1'b1;
+                end else if (if_id_enable) begin
+                    if (fetch_valid) begin
+                        if_id_instr <= instr_hrdata;
+                        if_id_pc    <= fetch_pc;
+                    end else begin
+                        if_id_instr <= 32'h00000013;
+                        if_id_pc    <= pc;
+                    end
+                    fetch_pc    <= pc;
+                    fetch_valid <= 1'b1;
+                end
+            end else begin
+                // Pipeline is frozen (e.g. data bus transfer or ALU stall)
+                if (fetch_valid && !skid_valid) begin
+                    skid_instr  <= instr_hrdata;
+                    skid_pc     <= fetch_pc;
+                    skid_valid  <= 1'b1;
+                    fetch_valid <= 1'b0;
+                end
+            end
         end
-        // If !if_id_enable, if_id_pc and if_id_instr hold their values
     end
 
     // =========================================================================
@@ -109,7 +174,7 @@ module top_piplined #(
     register_file reg_file (
         .clk(clk),
         .rstn(rstn),
-        .en_write(ex_mem_en_write),
+        .en_write(ex_mem_en_write && !freeze_all),
         .write_reg(ex_mem_write_reg),
         .write_data(write_back_data),
         .read_reg1(reg_sel_a),
@@ -194,13 +259,10 @@ module top_piplined #(
     wire stall_load_use = (ex_mem_instr_type == 4'b0001) && (ex_mem_write_reg != 5'd0) &&
                           ((ex_mem_write_reg == reg_sel_a) || (ex_mem_write_reg == reg_sel_b));
 
-    wire dmem_valid = (ex_mem_write_en || (ex_mem_instr_type == 4'b0001));
-    wire dmem_ready;
-    wire stall_dmem = dmem_valid && !dmem_ready;
-    wire stall_imem = imem_valid && !imem_ready;
+    wire stall_dmem;
 
     assign freeze_all     = stall_dmem;
-    wire   stall_stage1_2 = freeze_all || stall_alu_busy || stall_load_use || stall_imem;
+    assign stall_stage1_2 = freeze_all || stall_alu_busy || stall_load_use || stall_imem;
     assign insert_bubble  = stall_alu_busy || stall_load_use;
 
     assign pc_enable      = !stall_stage1_2;
@@ -241,44 +303,99 @@ module top_piplined #(
     end
 
     // =========================================================================
-    // Stage 3: MEM/WB (Memory Access & Writeback)
+    // Stage 3: MEM/WB (Memory Access & Writeback) with AHB Master FSM
     // =========================================================================
+    localparam D_IDLE = 1'b0;
+    localparam D_DATA = 1'b1;
+
+    reg d_state;
+
+    wire dmem_req = (ex_mem_instr_type == 4'b0001) || ex_mem_write_en;
     wire [31:0] mem_addr = ex_mem_alu_result;
 
-    wire [3:0] byte_en = (ex_mem_instr_type == 4'b0011) ? (
-                            (ex_mem_load_size == 3'b000) ? (4'b0001 << mem_addr[1:0]) : // SB
-                            (ex_mem_load_size == 3'b001) ? (4'b0011 << mem_addr[1:0]) : // SH
-                            (ex_mem_load_size == 3'b010) ? (4'b1111 << mem_addr[1:0]) : // SW
-                            4'b0000
-                         ) : 4'b0000;
+    // Sub-word formatting for HWDATA (byte/halfword replication across bus lanes)
+    wire [31:0] formatted_write_data =
+        (ex_mem_load_size == 3'b000) ? {4{ex_mem_write_data[7:0]}} :   // SB
+        (ex_mem_load_size == 3'b001) ? {2{ex_mem_write_data[15:0]}} :  // SH
+        ex_mem_write_data;                                              // SW
 
-    wire [31:0] formatted_write_data = (ex_mem_load_size == 3'b000) ? {4{ex_mem_write_data[7:0]}} :   // SB
-                                       (ex_mem_load_size == 3'b001) ? {2{ex_mem_write_data[15:0]}} :  // SH
-                                       ex_mem_write_data;                                              // SW
+    // Transfer size calculation from RISC-V load/store size
+    reg [2:0] calc_hsize;
+    always @(*) begin
+        case (ex_mem_load_size)
+            3'b000:  calc_hsize = 3'b000; // Byte
+            3'b001:  calc_hsize = 3'b001; // Halfword
+            3'b010:  calc_hsize = 3'b010; // Word
+            3'b011:  calc_hsize = 3'b000; // Byte unsigned
+            3'b100:  calc_hsize = 3'b001; // Halfword unsigned
+            default: calc_hsize = 3'b010;
+        endcase
+    end
 
-    wire [31:0] data_out;
+    // Combinational AHB Master Outputs
+    always @(*) begin
+        if (d_state == D_IDLE) begin
+            if (dmem_req) begin
+                data_hbusreq = 1'b1;
+                data_htrans  = 2'b10; // NONSEQ Address Phase
+                data_haddr   = mem_addr;
+                data_hwrite  = ex_mem_write_en;
+                data_hsize   = calc_hsize;
+                data_hwdata  = formatted_write_data;
+            end else begin
+                data_hbusreq = 1'b0;
+                data_htrans  = 2'b00; // IDLE
+                data_haddr   = 32'h00000000;
+                data_hwrite  = 1'b0;
+                data_hsize   = 3'b010;
+                data_hwdata  = 32'h00000000;
+            end
+        end else begin // D_DATA
+            data_hbusreq = 1'b0;
+            data_htrans  = 2'b00; // IDLE
+            data_haddr   = mem_addr;
+            data_hwrite  = ex_mem_write_en;
+            data_hsize   = calc_hsize;
+            data_hwdata  = formatted_write_data;
+        end
+    end
 
-    data_mem mem (
-        .clk(clk),
-        .rstn(rstn),
-        .addr(mem_addr),
-        .valid(dmem_valid),
-        .write_en(ex_mem_write_en),
-        .byte_en(byte_en),
-        .write_data(formatted_write_data),
-        .ready(dmem_ready),
-        .data_out(data_out)
-    );
+    // Pipeline stall for Data Port:
+    // When in D_IDLE, dmem_req requires freezing Stage 3 for the upcoming Data Phase.
+    // When in D_DATA, wait states from slave (!data_hready) extend the freeze.
+    assign stall_dmem = (d_state == D_IDLE) ? dmem_req : !data_hready;
 
-    // Sub-word Load Alignment & Sign Extension
-    wire [31:0] shifted_data_out = data_out >> (8 * mem_addr[1:0]);
+    always @(posedge clk or negedge rstn) begin
+        if (!rstn) begin
+            d_state <= D_IDLE;
+        end else begin
+            case (d_state)
+                D_IDLE: begin
+                    if (dmem_req && data_hgrant && data_hready) begin
+                        // Address phase accepted this cycle -> proceed to Data Phase next cycle
+                        d_state <= D_DATA;
+                    end
+                end
+                D_DATA: begin
+                    if (data_hready) begin
+                        // Data phase completed
+                        d_state <= D_IDLE;
+                    end
+                end
+            endcase
+        end
+    end
 
-    wire [31:0] aligned_load_data = (ex_mem_load_size == 3'b000) ? {{24{shifted_data_out[7]}}, shifted_data_out[7:0]} :   // LB
-                                    (ex_mem_load_size == 3'b001) ? {{16{shifted_data_out[15]}}, shifted_data_out[15:0]} : // LH
-                                    (ex_mem_load_size == 3'b010) ? shifted_data_out :                                      // LW
-                                    (ex_mem_load_size == 3'b011) ? {24'h000000, shifted_data_out[7:0]} :                  // LBU
-                                    (ex_mem_load_size == 3'b100) ? {16'h0000, shifted_data_out[15:0]} :                   // LHU
-                                    shifted_data_out;
+    // Sub-word Load Alignment & Sign Extension from HRDATA
+    wire [31:0] shifted_data_out = data_hrdata >> (8 * mem_addr[1:0]);
+
+    wire [31:0] aligned_load_data =
+        (ex_mem_load_size == 3'b000) ? {{24{shifted_data_out[7]}}, shifted_data_out[7:0]} :   // LB
+        (ex_mem_load_size == 3'b001) ? {{16{shifted_data_out[15]}}, shifted_data_out[15:0]} : // LH
+        (ex_mem_load_size == 3'b010) ? shifted_data_out :                                      // LW
+        (ex_mem_load_size == 3'b011) ? {24'h000000, shifted_data_out[7:0]} :                  // LBU
+        (ex_mem_load_size == 3'b100) ? {16'h0000, shifted_data_out[15:0]} :                   // LHU
+        shifted_data_out;
 
     // Writeback Data Selection
     assign write_back_data = (ex_mem_instr_type == 4'b0001) ? aligned_load_data : ex_mem_alu_result;

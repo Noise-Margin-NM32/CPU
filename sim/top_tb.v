@@ -60,7 +60,78 @@ module top_tb();
     integer passed_tests = 0;
     integer failed_tests = 0;
 
-    top_piplined uut (.clk(clk), .rstn(rstn));
+    // AHB-Lite Instruction Master Wires
+    wire [1:0]  instr_htrans;
+    wire [31:0] instr_haddr;
+    wire        instr_hwrite;
+    wire [2:0]  instr_hsize;
+    wire [31:0] instr_hwdata;
+    wire        instr_hready;
+    wire [31:0] instr_hrdata;
+    wire        instr_hresp;
+
+    // AHB Data Master Wires
+    wire        data_hbusreq;
+    wire [1:0]  data_htrans;
+    wire [31:0] data_haddr;
+    wire        data_hwrite;
+    wire [2:0]  data_hsize;
+    wire [31:0] data_hwdata;
+    wire        data_hgrant = 1'b1; // Default granted
+    wire        data_hready;
+    wire [31:0] data_hrdata;
+    wire        data_hresp;
+
+    top_piplined uut (
+        .clk(clk),
+        .rstn(rstn),
+        .instr_htrans(instr_htrans),
+        .instr_haddr(instr_haddr),
+        .instr_hwrite(instr_hwrite),
+        .instr_hsize(instr_hsize),
+        .instr_hwdata(instr_hwdata),
+        .instr_hready(instr_hready),
+        .instr_hrdata(instr_hrdata),
+        .instr_hresp(instr_hresp),
+        .data_hbusreq(data_hbusreq),
+        .data_htrans(data_htrans),
+        .data_haddr(data_haddr),
+        .data_hwrite(data_hwrite),
+        .data_hsize(data_hsize),
+        .data_hwdata(data_hwdata),
+        .data_hgrant(data_hgrant),
+        .data_hready(data_hready),
+        .data_hrdata(data_hrdata),
+        .data_hresp(data_hresp)
+    );
+
+    instruction_mem ROM (
+        .HCLK(clk),
+        .HRESETn(rstn),
+        .HADDR(instr_haddr),
+        .HTRANS(instr_htrans),
+        .HWRITE(instr_hwrite),
+        .HSIZE(instr_hsize),
+        .HWDATA(instr_hwdata),
+        .HREADY(instr_hready),
+        .HREADYOUT(instr_hready),
+        .HRDATA(instr_hrdata),
+        .HRESP(instr_hresp)
+    );
+
+    data_mem mem (
+        .HCLK(clk),
+        .HRESETn(rstn),
+        .HADDR(data_haddr),
+        .HTRANS(data_htrans),
+        .HWRITE(data_hwrite),
+        .HSIZE(data_hsize),
+        .HWDATA(data_hwdata),
+        .HREADY(data_hready),
+        .HREADYOUT(data_hready),
+        .HRDATA(data_hrdata),
+        .HRESP(data_hresp)
+    );
 
     always #5 clk = ~clk;
 	
@@ -80,150 +151,150 @@ module top_tb();
         uut.reg_file.registers[4] = 32'hFFFFFFFE; // x4 = -2
         uut.reg_file.registers[5] = 32'hFFFFFFFB; // x5 = -5
 
-        uut.mem.ram[17] = 32'hA5A5A5A5; // Initial value at addr 17
-        uut.mem.ram[18] = 32'h5A5A5A5A; // Initial value at addr 18
-        uut.mem.ram[19] = 32'h12345678; // Initial value at addr 19
-        uut.mem.ram[10] = 32'h89ABCDEF; // Initialize data memory at addr 10 for Load tests
+        mem.ram[17] = 32'hA5A5A5A5; // Initial value at addr 17
+        mem.ram[18] = 32'h5A5A5A5A; // Initial value at addr 18
+        mem.ram[19] = 32'h12345678; // Initial value at addr 19
+        mem.ram[10] = 32'h89ABCDEF; // Initialize data memory at addr 10 for Load tests
 
         // Tests 1-10: R-type Arithmetic & Logical
-        uut.ROM.rom[0] = 32'h00208333; // add x6, x1, x2
-        uut.ROM.rom[1] = 32'h402083B3; // sub x7, x1, x2
-        uut.ROM.rom[2] = 32'h00209433; // sll x8, x1, x2
-        uut.ROM.rom[3] = 32'h002224B3; // slt x9, x4, x2
-        uut.ROM.rom[4] = 32'h0020B533; // sltu x10, x1, x2
-        uut.ROM.rom[5] = 32'h0020c5b3; // xor x11, x1, x2
-        uut.ROM.rom[6] = 32'h0020d633; // srl x12, x1, x2
-        uut.ROM.rom[7] = 32'h402256B3; // sra x13, x4, x2
-        uut.ROM.rom[8] = 32'h0020E733; // or x14, x1, x2
-        uut.ROM.rom[9] = 32'h0020F7B3; // and x15, x1, x2
+        ROM.rom[0] = 32'h00208333; // add x6, x1, x2
+        ROM.rom[1] = 32'h402083B3; // sub x7, x1, x2
+        ROM.rom[2] = 32'h00209433; // sll x8, x1, x2
+        ROM.rom[3] = 32'h002224B3; // slt x9, x4, x2
+        ROM.rom[4] = 32'h0020B533; // sltu x10, x1, x2
+        ROM.rom[5] = 32'h0020c5b3; // xor x11, x1, x2
+        ROM.rom[6] = 32'h0020d633; // srl x12, x1, x2
+        ROM.rom[7] = 32'h402256B3; // sra x13, x4, x2
+        ROM.rom[8] = 32'h0020E733; // or x14, x1, x2
+        ROM.rom[9] = 32'h0020F7B3; // and x15, x1, x2
 
         // Tests 11-18: IA-Type (Immediate Arithmetic)
-        uut.ROM.rom[10] = 32'h00A08813; // addi x16, x1, 10    (5 + 10 = 15)
-        uut.ROM.rom[11] = 32'h00209893; // slli x17, x1, 2     (5 << 2 = 20)
-        uut.ROM.rom[12] = 32'h00A0A913; // slti x18, x1, 10    (5 < 10 = 1)
-        uut.ROM.rom[13] = 32'h00F0C993; // xori x19, x1, 15    (5 ^ 15 = 10)
-        uut.ROM.rom[14] = 32'h0010DA13; // srli x20, x1, 1     (5 >> 1 = 2)
-        uut.ROM.rom[15] = 32'h40125A93; // srai x21, x4, 1     (-2 >> 1 = -1)
-        uut.ROM.rom[16] = 32'h0080EB13; // ori x22, x1, 8      (5 | 8 = 13)
-        uut.ROM.rom[17] = 32'h0040FB93; // andi x23, x1, 4     (5 & 4 = 4)
+        ROM.rom[10] = 32'h00A08813; // addi x16, x1, 10    (5 + 10 = 15)
+        ROM.rom[11] = 32'h00209893; // slli x17, x1, 2     (5 << 2 = 20)
+        ROM.rom[12] = 32'h00A0A913; // slti x18, x1, 10    (5 < 10 = 1)
+        ROM.rom[13] = 32'h00F0C993; // xori x19, x1, 15    (5 ^ 15 = 10)
+        ROM.rom[14] = 32'h0010DA13; // srli x20, x1, 1     (5 >> 1 = 2)
+        ROM.rom[15] = 32'h40125A93; // srai x21, x4, 1     (-2 >> 1 = -1)
+        ROM.rom[16] = 32'h0080EB13; // ori x22, x1, 8      (5 | 8 = 13)
+        ROM.rom[17] = 32'h0040FB93; // andi x23, x1, 4     (5 & 4 = 4)
 
         // Tests 19-23: IL-Type (Load)
-        uut.ROM.rom[18] = 32'h02308C03; // lb x24, 35(x1)
-        uut.ROM.rom[19] = 32'h02309C83; // lh x25, 35(x1)
-        uut.ROM.rom[20] = 32'h0230AD03; // lw x26, 35(x1)
-        uut.ROM.rom[21] = 32'h0230CD83; // lbu x27, 35(x1)
-        uut.ROM.rom[22] = 32'h0230DE03; // lhu x28, 35(x1)
+        ROM.rom[18] = 32'h02308C03; // lb x24, 35(x1)
+        ROM.rom[19] = 32'h02309C83; // lh x25, 35(x1)
+        ROM.rom[20] = 32'h0230AD03; // lw x26, 35(x1)
+        ROM.rom[21] = 32'h0230CD83; // lbu x27, 35(x1)
+        ROM.rom[22] = 32'h0230DE03; // lhu x28, 35(x1)
 
         // Tests 24-26: S-Type (Store)
-        uut.ROM.rom[23] = 32'h0230AFA3; // sw x3, 63(x1) -> RAM[17] = 7
-        uut.ROM.rom[24] = 32'h043091A3; // sh x3, 67(x1) -> RAM[18][15:0] = 7
-        uut.ROM.rom[25] = 32'h043083A3; // sb x3, 71(x1) -> RAM[19][7:0] = 7
+        ROM.rom[23] = 32'h0230AFA3; // sw x3, 63(x1) -> RAM[17] = 7
+        ROM.rom[24] = 32'h043091A3; // sh x3, 67(x1) -> RAM[18][15:0] = 7
+        ROM.rom[25] = 32'h043083A3; // sb x3, 71(x1) -> RAM[19][7:0] = 7
 
         // Test 27: BEQ Not Taken
-        uut.ROM.rom[26] = 32'h00208663; // beq x1, x2, 12 (Not Taken, PC goes to 27)
-        uut.ROM.rom[27] = 32'h00A00F13; // addi x30, x0, 10 (executed, x30 = 10)
-        uut.ROM.rom[28] = 32'h00000013; // nop
-        uut.ROM.rom[29] = 32'h00000013; // nop
+        ROM.rom[26] = 32'h00208663; // beq x1, x2, 12 (Not Taken, PC goes to 27)
+        ROM.rom[27] = 32'h00A00F13; // addi x30, x0, 10 (executed, x30 = 10)
+        ROM.rom[28] = 32'h00000013; // nop
+        ROM.rom[29] = 32'h00000013; // nop
 
         // Setup x29 = 5 for Test 28
         uut.reg_file.registers[29] = 32'h00000005;
 
         // Test 28: BEQ Taken
-        uut.ROM.rom[30] = 32'h01D08863; // beq x1, x29, 16 (Taken, PC goes to index 34)
-        uut.ROM.rom[31] = 32'h01400F93; // addi x31, x0, 20 (should be skipped)
-        uut.ROM.rom[32] = 32'h00000013; // nop
-        uut.ROM.rom[33] = 32'h00000013; // nop
-        uut.ROM.rom[34] = 32'h01E00F93; // addi x31, x0, 30 (executed, x31 = 30)
+        ROM.rom[30] = 32'h01D08863; // beq x1, x29, 16 (Taken, PC goes to index 34)
+        ROM.rom[31] = 32'h01400F93; // addi x31, x0, 20 (should be skipped)
+        ROM.rom[32] = 32'h00000013; // nop
+        ROM.rom[33] = 32'h00000013; // nop
+        ROM.rom[34] = 32'h01E00F93; // addi x31, x0, 30 (executed, x31 = 30)
 
         // Test 29: BNE Taken
-        uut.ROM.rom[35] = 32'h00209863; // bne x1, x2, 16 (Taken, PC goes to index 39)
-        uut.ROM.rom[36] = 32'h02800093; // addi x1, x0, 40 (should be skipped)
-        uut.ROM.rom[37] = 32'h00000013; // nop
-        uut.ROM.rom[38] = 32'h00000013; // nop
-        uut.ROM.rom[39] = 32'h03200093; // addi x1, x0, 50 (executed, x1 = 50)
+        ROM.rom[35] = 32'h00209863; // bne x1, x2, 16 (Taken, PC goes to index 39)
+        ROM.rom[36] = 32'h02800093; // addi x1, x0, 40 (should be skipped)
+        ROM.rom[37] = 32'h00000013; // nop
+        ROM.rom[38] = 32'h00000013; // nop
+        ROM.rom[39] = 32'h03200093; // addi x1, x0, 50 (executed, x1 = 50)
 
         // Test 30: BLT Taken
-        uut.ROM.rom[40] = 32'h0042C863; // blt x5, x4, 16 (Taken, PC goes to index 44)
-        uut.ROM.rom[41] = 32'h04600113; // addi x2, x0, 70 (should be skipped)
-        uut.ROM.rom[42] = 32'h00000013; // nop
-        uut.ROM.rom[43] = 32'h00000013; // nop
-        uut.ROM.rom[44] = 32'h03C00113; // addi x2, x0, 60 (executed, x2 = 60)
+        ROM.rom[40] = 32'h0042C863; // blt x5, x4, 16 (Taken, PC goes to index 44)
+        ROM.rom[41] = 32'h04600113; // addi x2, x0, 70 (should be skipped)
+        ROM.rom[42] = 32'h00000013; // nop
+        ROM.rom[43] = 32'h00000013; // nop
+        ROM.rom[44] = 32'h03C00113; // addi x2, x0, 60 (executed, x2 = 60)
 
         // Test 31: BGE Taken
-        uut.ROM.rom[45] = 32'h0052D863; // bge x4, x5, 16 (Taken, PC goes to index 49)
-        uut.ROM.rom[46] = 32'h05A00193; // addi x3, x0, 90 (should be skipped)
-        uut.ROM.rom[47] = 32'h00000013; // nop
-        uut.ROM.rom[48] = 32'h00000013; // nop
-        uut.ROM.rom[49] = 32'h05000193; // addi x3, x0, 80 (executed, x3 = 80)
+        ROM.rom[45] = 32'h0052D863; // bge x4, x5, 16 (Taken, PC goes to index 49)
+        ROM.rom[46] = 32'h05A00193; // addi x3, x0, 90 (should be skipped)
+        ROM.rom[47] = 32'h00000013; // nop
+        ROM.rom[48] = 32'h00000013; // nop
+        ROM.rom[49] = 32'h05000193; // addi x3, x0, 80 (executed, x3 = 80)
 
         // Test 32: BLTU Not Taken
-        uut.ROM.rom[50] = 32'h00126863; // bltu x4, x1, 16 (Not Taken, PC goes to 51)
-        uut.ROM.rom[51] = 32'h06400213; // addi x4, x0, 100 (executed, x4 = 100)
-        uut.ROM.rom[52] = 32'h00000013; // nop
-        uut.ROM.rom[53] = 32'h00000013; // nop
-        uut.ROM.rom[54] = 32'h06E00E93; // addi x29, x0, 110 (skipped)
+        ROM.rom[50] = 32'h00126863; // bltu x4, x1, 16 (Not Taken, PC goes to 51)
+        ROM.rom[51] = 32'h06400213; // addi x4, x0, 100 (executed, x4 = 100)
+        ROM.rom[52] = 32'h00000013; // nop
+        ROM.rom[53] = 32'h00000013; // nop
+        ROM.rom[54] = 32'h06E00E93; // addi x29, x0, 110 (skipped)
 
         // Test 33: BGEU Taken
-        uut.ROM.rom[55] = 32'h00127863; // bgeu x4, x1, 16 (Taken, PC goes to index 59)
-        uut.ROM.rom[56] = 32'h08200293; // addi x5, x0, 130 (should be skipped)
-        uut.ROM.rom[57] = 32'h00000013; // nop
-        uut.ROM.rom[58] = 32'h00000013; // nop
-        uut.ROM.rom[59] = 32'h07800293; // addi x5, x0, 120 (executed, x5 = 120)
+        ROM.rom[55] = 32'h00127863; // bgeu x4, x1, 16 (Taken, PC goes to index 59)
+        ROM.rom[56] = 32'h08200293; // addi x5, x0, 130 (should be skipped)
+        ROM.rom[57] = 32'h00000013; // nop
+        ROM.rom[58] = 32'h00000013; // nop
+        ROM.rom[59] = 32'h07800293; // addi x5, x0, 120 (executed, x5 = 120)
 
         // Test 34: LUI
-        uut.ROM.rom[60] = 32'h12345EB7; // lui x29, 32'h12345
-        uut.ROM.rom[61] = 32'h05D02823; // sw x29, 80(x0) (stores LUI result at RAM[20])
+        ROM.rom[60] = 32'h12345EB7; // lui x29, 32'h12345
+        ROM.rom[61] = 32'h05D02823; // sw x29, 80(x0) (stores LUI result at RAM[20])
 
         // Test 35: AUIPC
-        uut.ROM.rom[62] = 32'h22222E97; // auipc x29, 32'h22222 (PC=248 -> 0x222220F8)
-        uut.ROM.rom[63] = 32'h07D02023; // sw x29, 96(x0) (stores AUIPC result at RAM[24])
+        ROM.rom[62] = 32'h22222E97; // auipc x29, 32'h22222 (PC=248 -> 0x222220F8)
+        ROM.rom[63] = 32'h07D02023; // sw x29, 96(x0) (stores AUIPC result at RAM[24])
 
         // Test 36: JAL
-        uut.ROM.rom[64] = 32'h12000EEF; // jal x29, 288 (jumps to index 136, link=0x104)
-        uut.ROM.rom[65] = 32'h09D02823; // sw x29, 144(x0) (stores to RAM[36] - skipped!)
-        uut.ROM.rom[136] = 32'h07D02823; // sw x29, 112(x0) (stores JAL return address 0x104 at RAM[28])
+        ROM.rom[64] = 32'h12000EEF; // jal x29, 288 (jumps to index 136, link=0x104)
+        ROM.rom[65] = 32'h09D02823; // sw x29, 144(x0) (stores to RAM[36] - skipped!)
+        ROM.rom[136] = 32'h07D02823; // sw x29, 112(x0) (stores JAL return address 0x104 at RAM[28])
 
         // Test 37: JALR
-        uut.ROM.rom[137] = 32'h11c00E93; // addi x29, x0, 284
-        uut.ROM.rom[138] = 32'h004E8EE7; // jalr x29, x29, 4 (jumps to target 288=index 72, link=0x22C)
-        uut.ROM.rom[139] = 32'h0BD02023; // sw x29, 160(x0) (stores to RAM[40] - skipped!)
+        ROM.rom[137] = 32'h11c00E93; // addi x29, x0, 284
+        ROM.rom[138] = 32'h004E8EE7; // jalr x29, x29, 4 (jumps to target 288=index 72, link=0x22C)
+        ROM.rom[139] = 32'h0BD02023; // sw x29, 160(x0) (stores to RAM[40] - skipped!)
 
         // Target of JALR: index 72 (PC=288)
-        uut.ROM.rom[72] = 32'h09D02023; // sw x29, 128(x0) (stores JALR return address 0x22C at RAM[32])
+        ROM.rom[72] = 32'h09D02023; // sw x29, 128(x0) (stores JALR return address 0x22C at RAM[32])
 
         // ===== M-Extension Instructions =====
         // Starting at index 73 (PC=292): Setup registers, then run M-extension
-        uut.ROM.rom[73] = 32'h00700093; // addi x1, x0, 7
-        uut.ROM.rom[74] = 32'h00300113; // addi x2, x0, 3
-        uut.ROM.rom[75] = 32'hFFB00193; // addi x3, x0, -5
-        uut.ROM.rom[76] = 32'hFFD00213; // addi x4, x0, -3
+        ROM.rom[73] = 32'h00700093; // addi x1, x0, 7
+        ROM.rom[74] = 32'h00300113; // addi x2, x0, 3
+        ROM.rom[75] = 32'hFFB00193; // addi x3, x0, -5
+        ROM.rom[76] = 32'hFFD00213; // addi x4, x0, -3
 
         // Test 38: MUL x5, x1, x2 -> 7 * 3 = 21 (0x15)
-        uut.ROM.rom[77] = 32'h022082B3;
+        ROM.rom[77] = 32'h022082B3;
 
         // Test 39: MULH x6, x3, x4 -> (-5) * (-3) = 15, upper 32 = 0x0
-        uut.ROM.rom[78] = 32'h02419333;
+        ROM.rom[78] = 32'h02419333;
 
         // Test 40: MULHSU x7, x3, x2 -> (-5) * 3 = -15, upper 32 = 0xFFFFFFFF
-        uut.ROM.rom[79] = 32'h0221A3B3;
+        ROM.rom[79] = 32'h0221A3B3;
 
         // Test 41: MULHU x8, x1, x2 -> 7 * 3 = 21, upper 32 = 0x0
-        uut.ROM.rom[80] = 32'h0220B433;
+        ROM.rom[80] = 32'h0220B433;
 
         // Test 42: DIV x9, x3, x2 -> (-5) / 3 = -1 (0xFFFFFFFF)
-        uut.ROM.rom[81] = 32'h0221C4B3;
+        ROM.rom[81] = 32'h0221C4B3;
 
         // Test 43: DIVU x10, x1, x2 -> 7 / 3 = 2
-        uut.ROM.rom[82] = 32'h0220D533;
+        ROM.rom[82] = 32'h0220D533;
 
         // Test 44: REM x11, x3, x2 -> (-5) % 3 = -2 (0xFFFFFFFE)
-        uut.ROM.rom[83] = 32'h0221E5B3;
+        ROM.rom[83] = 32'h0221E5B3;
 
         // Test 45: REMU x12, x1, x2 -> 7 % 3 = 1
-        uut.ROM.rom[84] = 32'h0220F633;
+        ROM.rom[84] = 32'h0220F633;
 
         // Halt instruction at index 85 (jump to self)
-        uut.ROM.rom[85] = 32'h0000006F; // j . (jal x0, 0)
+        ROM.rom[85] = 32'h0000006F; // j . (jal x0, 0)
 
         // Wait until Phase 1 instructions (up to JALR at PC=288) execute
         wait(uut.pc == 32'd292);
@@ -517,7 +588,7 @@ module top_tb();
         $display("--------------------");
         
         // Test 24: SW
-        if (uut.mem.ram[17] == 32'h00000007) begin
+        if (mem.ram[17] == 32'h00000007) begin
             $display("Test 24 Passed: SW");
             passed_tests = passed_tests + 1;
             test_status[24] = 1'b1;
@@ -525,11 +596,11 @@ module top_tb();
             $display("Test 24 Failed: SW");
             failed_tests = failed_tests + 1;
         end
-        $display("Expected: 0x00000007, Got: 0x%h", uut.mem.ram[17]);
+        $display("Expected: 0x00000007, Got: 0x%h", mem.ram[17]);
         $display("--------------------");
 
         // Test 25: SH
-        if (uut.mem.ram[18] == 32'h5a5a0007) begin
+        if (mem.ram[18] == 32'h5a5a0007) begin
             $display("Test 25 Passed: SH");
             passed_tests = passed_tests + 1;
             test_status[25] = 1'b1;
@@ -537,11 +608,11 @@ module top_tb();
             $display("Test 25 Failed: SH");
             failed_tests = failed_tests + 1;
         end
-        $display("Expected: 0x5a5a0007, Got: 0x%h", uut.mem.ram[18]);
+        $display("Expected: 0x5a5a0007, Got: 0x%h", mem.ram[18]);
         $display("--------------------");
 
         // Test 26: SB
-        if (uut.mem.ram[19] == 32'h12345607) begin
+        if (mem.ram[19] == 32'h12345607) begin
             $display("Test 26 Passed: SB");
             passed_tests = passed_tests + 1;
             test_status[26] = 1'b1;
@@ -549,7 +620,7 @@ module top_tb();
             $display("Test 26 Failed: SB");
             failed_tests = failed_tests + 1;
         end
-        $display("Expected: 0x12345607, Got: 0x%h", uut.mem.ram[19]);
+        $display("Expected: 0x12345607, Got: 0x%h", mem.ram[19]);
         $display("--------------------");
 
         // Test 27: BEQ Not Taken
@@ -637,7 +708,7 @@ module top_tb();
         $display("--------------------");
 
         // Test 34: LUI
-        if (uut.mem.ram[20] == 32'h12345000) begin
+        if (mem.ram[20] == 32'h12345000) begin
             $display("Test 34 Passed: LUI");
             passed_tests = passed_tests + 1;
             test_status[34] = 1'b1;
@@ -645,11 +716,11 @@ module top_tb();
             $display("Test 34 Failed: LUI");
             failed_tests = failed_tests + 1;
         end
-        $display("Expected: 0x12345000, Got: 0x%h", uut.mem.ram[20]);
+        $display("Expected: 0x12345000, Got: 0x%h", mem.ram[20]);
         $display("--------------------");
 
         // Test 35: AUIPC
-        if (uut.mem.ram[24] == 32'h222220F8) begin
+        if (mem.ram[24] == 32'h222220F8) begin
             $display("Test 35 Passed: AUIPC");
             passed_tests = passed_tests + 1;
             test_status[35] = 1'b1;
@@ -657,11 +728,11 @@ module top_tb();
             $display("Test 35 Failed: AUIPC");
             failed_tests = failed_tests + 1;
         end
-        $display("Expected: 0x222220F8, Got: 0x%h", uut.mem.ram[24]);
+        $display("Expected: 0x222220F8, Got: 0x%h", mem.ram[24]);
         $display("--------------------");
 
         // Test 36: JAL
-        if (uut.mem.ram[28] == 32'h00000104 && (uut.mem.ram[36] == 32'h0 || $isunknown(uut.mem.ram[36]))) begin
+        if (mem.ram[28] == 32'h00000104 && (mem.ram[36] == 32'h0 || $isunknown(mem.ram[36]))) begin
             $display("Test 36 Passed: JAL");
             passed_tests = passed_tests + 1;
             test_status[36] = 1'b1;
@@ -669,12 +740,12 @@ module top_tb();
             $display("Test 36 Failed: JAL");
             failed_tests = failed_tests + 1;
         end
-        $display("Expected Return: 0x00000104, Got: 0x%h", uut.mem.ram[28]);
-        $display("Expected Skip Success (RAM[36]!=0X00000104): Got: 0x%h", uut.mem.ram[36]);
+        $display("Expected Return: 0x00000104, Got: 0x%h", mem.ram[28]);
+        $display("Expected Skip Success (RAM[36]!=0X00000104): Got: 0x%h", mem.ram[36]);
         $display("--------------------");
 
         // Test 37: JALR
-        if (uut.mem.ram[32] == 32'h0000022c && (uut.mem.ram[40] == 32'h0 || $isunknown(uut.mem.ram[40]))) begin
+        if (mem.ram[32] == 32'h0000022c && (mem.ram[40] == 32'h0 || $isunknown(mem.ram[40]))) begin
             $display("Test 37 Passed: JALR");
             passed_tests = passed_tests + 1;
             test_status[37] = 1'b1;
@@ -682,8 +753,8 @@ module top_tb();
             $display("Test 37 Failed: JALR");
             failed_tests = failed_tests + 1;
         end
-        $display("Expected Return: 0x0000022C, Got: 0x%h", uut.mem.ram[32]);
-        $display("Expected Skip Success (RAM[40]=0xXXXXXXXX): Got: 0x%h", uut.mem.ram[40]);
+        $display("Expected Return: 0x0000022C, Got: 0x%h", mem.ram[32]);
+        $display("Expected Skip Success (RAM[40]=0xXXXXXXXX): Got: 0x%h", mem.ram[40]);
         $display("--------------------");
 
         // ===== M-Extension Verification =====
